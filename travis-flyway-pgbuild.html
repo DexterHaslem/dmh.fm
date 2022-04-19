@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - Travis flyway PostgreSQL builds">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - Travis flyway PostgreSQL builds</title>
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+    <script src="https://media.dmh.fm/hljs/highlight.min.js"></script>
+</head>
+
+<body>
+    <h2>Travis flyway PostgreSQL builds</h2>
+
+    <h3 id="overview">Overview</h3>
+<p>This post is about using Travis CI to test a Java
+Spring Boot (or similar) project that uses PostgreSQL (or any other supported DB)
+with <a href="https://flywaydb.org/">flyway</a> migrations built by gradle.
+I&#39;ve done most of these steps separately, but getting them all to work
+ together with Travis took some time.</p>
+<p>To give some background, The documentation
+is sparse and I had to combine many other techniques to
+get everything to work correctly.</p>
+<p>I probably could have got away with using build environment variables
+(I&#39;ve done this with TeamCity to great effect) to set the database config,
+but a second config was the most straightforward approach on an existing codebase.</p>
+<h3 id="prerequisites">Prerequisites</h3>
+<ul>
+<li>Java Spring (or Spring boot) project compiled against <em>java 8</em> -
+   I tested against a fresh spring boot 1.4 project using gradle.</li>
+<li>flyway is setup in your gradle build. <a href="https://flywaydb.org/getstarted/firststeps/gradle">instructions</a></li>
+<li>furthermore, your database migrations are created in a way that they can flyway from an empty db</li>
+<li>TravisCI already pointing at your github repository</li>
+</ul>
+<h3 id="overview-of-steps">Overview of steps</h3>
+<ol>
+<li>create a test/CI only copy of application properties</li>
+<li>setup gradle + Flyway and spring toggling application properties files</li>
+<li>configuring Travis CI</li>
+</ol>
+<h4 id="test-specific-app-properties">Test specific app properties</h4>
+<p>I have an <code>application.properties</code> file setup with my usual spring datasource development database, eg,</p>
+<pre><code class="lang-jproperties">    spring<span class="hljs-selector-class">.datasource</span><span class="hljs-selector-class">.driverClassName</span>=org<span class="hljs-selector-class">.postgresql</span><span class="hljs-selector-class">.Driver</span>
+    spring<span class="hljs-selector-class">.datasource</span><span class="hljs-selector-class">.username</span>=reload
+    spring<span class="hljs-selector-class">.datasource</span><span class="hljs-selector-class">.password</span>=reload
+    spring<span class="hljs-selector-class">.datasource</span><span class="hljs-selector-class">.url</span>=jdbc:postgresql:<span class="hljs-comment">//192.168.1.18:5432/reload?autoReconnect=true</span>
+    spring<span class="hljs-selector-class">.jpa</span><span class="hljs-selector-class">.database-platform</span>=org<span class="hljs-selector-class">.hibernate</span><span class="hljs-selector-class">.dialect</span><span class="hljs-selector-class">.PostgreSQLDialect</span>
+    spring<span class="hljs-selector-class">.jpa</span><span class="hljs-selector-class">.show-sql</span>=false
+</code></pre>
+<p>the first step is to copy this file to <code>application.test.properties</code> (in src/main/resources)
+and change the database username to &#39;postgres&#39;. Travis CI will use the username &#39;postgres&#39;
+ with no password on a database you can choose to create.
+I stuck with the documentation example and used the database &#39;travis_ci_test&#39;.</p>
+<p>The updated <code>application.test.properties</code> would look like this</p>
+<pre><code class="lang-jproperties">    spring<span class="hljs-selector-class">.datasource</span><span class="hljs-selector-class">.driverClassName</span>=org<span class="hljs-selector-class">.postgresql</span><span class="hljs-selector-class">.Driver</span>
+    spring<span class="hljs-selector-class">.datasource</span><span class="hljs-selector-class">.username</span>=postgres
+    spring<span class="hljs-selector-class">.datasource</span><span class="hljs-selector-class">.password</span>=
+    spring<span class="hljs-selector-class">.datasource</span><span class="hljs-selector-class">.url</span>=jdbc:postgresql:<span class="hljs-comment">//localhost/travis_ci_test</span>
+    spring<span class="hljs-selector-class">.jpa</span><span class="hljs-selector-class">.database-platform</span>=org<span class="hljs-selector-class">.hibernate</span><span class="hljs-selector-class">.dialect</span><span class="hljs-selector-class">.PostgreSQLDialect</span>
+    spring<span class="hljs-selector-class">.jpa</span><span class="hljs-selector-class">.show-sql</span>=false
+</code></pre>
+<p>Now we need to let the source know how to determine which file to use</p>
+<h4 id="spring-propertysource-and-gradle-flyway-setup">Spring @PropertySource and gradle flyway setup</h4>
+<p>These instructions are from the following page on <a href="https://www.jayway.com/2014/02/16/spring-propertysource/">jayway</a>, which was super helpful.
+I will summerize here the steps I took to implement this approach.</p>
+<p>First, pick an environment variable name to set the application properties. You will need
+to remember this for java code and the Travis CI config. I used &#39;APP_PROPS_FILE&#39;.</p>
+<p>In your spring application entry point (Usually <MyArtifact>Application),
+wherever you have @SpringBootApplication, @Configuration, entity scan setup, etc,
+you need to add the following @PropertySource annotations.</p>
+<pre><code class="lang-java">    <span class="hljs-variable">@SpringBootApplication</span>
+    <span class="hljs-variable">@PropertySource</span>(<span class="hljs-string">"classpath:application.properties"</span>)
+    <span class="hljs-variable">@PropertySource</span>(value=<span class="hljs-string">"classpath:${APP_PROPS_FILE}"</span>, ignoreResourceNotFound = true)
+    public class MyCoolApplication {
+        <span class="hljs-comment">// ...</span>
+</code></pre>
+<p>There is two so if the environment variable is not set,
+it will default to the &#39;application.properties&#39; file.</p>
+<p>Next, we need to also update our gradle so flyway knows this trick as well.</p>
+<p>make your entire flyway task look like this</p>
+<pre><code class="lang-groovy">    flyway {
+        Properties <span class="hljs-built_in">props</span> = <span class="hljs-built_in">new</span> Properties()
+        def springProp = System.<span class="hljs-built_in">getenv</span>(<span class="hljs-string">"APP_PROPS_FILE"</span>) ?: <span class="hljs-string">"application.properties"</span>
+        <span class="hljs-built_in">props</span>.<span class="hljs-built_in">load</span>(<span class="hljs-built_in">new</span> FileInputStream(<span class="hljs-string">"${projectDir}/src/main/resources/"</span> + springProp))
+        url = <span class="hljs-built_in">props</span>.<span class="hljs-string">"spring.datasource.url"</span>
+        user = <span class="hljs-built_in">props</span>.<span class="hljs-string">"spring.datasource.username"</span>
+        password = <span class="hljs-built_in">props</span>.<span class="hljs-string">"spring.datasource.password"</span>
+    }
+</code></pre>
+<p>this is the same concept, it will default to application.properties if the environment
+variable is not set. We&#39;re almost done</p>
+<h4 id="configuring-travis-ci-for-postgresql-and-running-flyway">Configuring Travis CI for PostgreSQL and running flyway</h4>
+<p>Now the part that ties it all together, instructing travis to create a test database
+and flyway it.</p>
+<p>the first thing we need to add is our environment variable we setup, setting
+the test file we want to use, add the following to <code>.travis.yml</code></p>
+<pre><code class="lang-yaml">    <span class="hljs-keyword">en</span><span class="hljs-variable">v:</span>
+    - APP_PROPS_FILE=<span class="hljs-string">"application.test.properties"</span>
+</code></pre>
+<p>Travis will set the correct environment var for the build! Lets make it
+use PostgreSQL and create the database before the build with the following:</p>
+<pre><code class="lang-yaml">    <span class="hljs-attribute">services</span>:
+    - postgresql
+
+    <span class="hljs-attribute">addons</span>:
+    <span class="hljs-attribute">postgresql</span>: <span class="hljs-string">"9.4"</span>
+
+    <span class="hljs-attribute">before_script</span>:
+    - psql -c <span class="hljs-string">'create database travis_ci_test;'</span> -U postgres
+</code></pre>
+<p>This ensures we have an empty &#39;travis_ci_test&#39; database ready. Lastly,
+we need to customize the build script to actually run flyway. I personally
+use gradle test task over check, so I have that here, but change anything
+after flywayMigrate -i to whatever you like (test, check, war, jar, etc)</p>
+<pre><code class="lang-yaml">    # <span class="hljs-keyword">if</span> you<span class="hljs-symbol">'re</span> using gradlew wrapper, <span class="hljs-keyword">else</span> replace <span class="hljs-keyword">with</span> <span class="hljs-symbol">'gradle</span>'
+    script: ./gradlew flywayMigrate -i test
+</code></pre>
+<p>Boom! Now we flyway a fresh db before running tests automagically every build.
+It&#39;s worth noting that gradle will run &#39;gradle assemble&#39;
+as the install step first as well.</p>
+<p>What&#39;s the &#39;-i&#39; on the flyway task? It is <em>info</em> and will display details and
+status of migrations, it&#39;s totally optional though.</p>
+<h3 id="references">References</h3>
+<p>Here are links to working files</p>
+<ul>
+<li><a href="https://raw.githubusercontent.com/DexterHaslem/reload-db-backend/master/build.gradle">build.gradle</a></li>
+<li><a href="https://raw.githubusercontent.com/DexterHaslem/reload-db-backend/master/.travis.yml">.travis.yml</a></li>
+</ul>
+<h4 id="opinionated-side-notes">Opinionated side notes</h4>
+<ul>
+<li>Flyway is excellent and is an effective way to <strong>version control your database</strong>. USE IT</li>
+<li>You can automatically prefix your flyway migrations, see <a href="https://gist.github.com/jeremyjarrell/6083207">THIS GIST</a></li>
+<li>Spring boot 1.4 added many nice testing features which made this even more low friction</li>
+</ul>
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+</body>
+</html>

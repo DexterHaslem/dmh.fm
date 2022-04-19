@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - lightweight angular metrics">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - lightweight angular metrics</title>
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+    <script src="https://media.dmh.fm/hljs/highlight.min.js"></script>
+</head>
+
+<body>
+    <script>hljs.highlightAll();</script>
+    <h2>Lightweight angular (2+) client metrics</h2>
+
+    <p>Here is how to cover collecting metrics (or events if you prefer) such as click or touch events on DOM elements across an entire Angular2+ project.
+This has the following caveats: It's designed for simple 'did the user interact' with elements type of logging, not advanced mouse trail logging and ux type of metrics. I recommend a full blown metrics product for anything that gets any more involved. Additionally, 
+it rips through the DOM so this is not recommended on any performance sensitive elements or extremely large DOM trees.
+Lastly - if you only care about input resulting in a useful action, simply log redux actions instead.
+With that said here's what is needed! 
+
+<ol>
+    <li>Rig up @HostListener for each event type we care about</li>
+    <li>Grab DOM metadata programmically</li>
+    <li>Attach metadata to elements we want to track</li>
+    <li>Send off metadata and event info</li>
+</ol>
+</p>
+
+<h3>Rigging up @HostListeners</h3>
+
+<p>
+This is probably the easiest step, and this is a really useful part of Angular that makes its very easy to capture events SPA-wide.
+NOTE: In my production code i pulled event type into an enum and recommend strongly typing all known event types you care about, but we will keep it simple here as a string 'click'.
+Lets setup listening to every click event that happens in our body by putting this @HostListener in our toplevel 'app' component (or similar):
+</p>
+
+<pre><code class="language-typescript">@HostListener('body:click', ['$event'])
+onBodyElementClicked(ev: Event) {
+  this.reportEventMetric(ev.target, 'click');
+}</code></pre>
+
+<p>
+We will create reportEventMetric later on. This will fire when anything is clicked anywhere in the body, so this is the only event handler we need!
+</p>
+
+<h3>Grabbing metadata programmically</h3>
+
+<p>
+Next we need to create a function that will look at whatever was clicked and determine if it's been tagged to keep track of.
+For this we need to determine a metric attribute. In this example I'll use a data-metric attribute.
+Now all we need to do is look for data-metric on the DOM element, BUT not just it, we want to walk up the visual tree incase the click was reported on a child element that we care less about.
+</p>
+
+<pre><code class="language-typescript">private reportEventMetric(start: EventTarget, evType: string) {
+    // this helper will call a recursive function to rip through DOM
+    const metric = this.findDataMetricTag(start, evType);
+    if (metric) {
+        // once you have metrics, you can POST to server, export to csv,
+        // stick in state, whatever. in this case lets just log em
+        console.log(`${evType} metric: ${metric}`);
+    }
+}
+
+// here is the meat recursive function that will rip through dom elements looking
+// for our data attribute
+private findDataMetricTag(start: EventTarget, eventType: string): string | null {
+    if (!start || !(start instanceof HTMLElement)) {
+        return null;
+    }
+
+    // in production code, i recommend pulling 'data-metric' to a const or readonly class prop
+    const metricAttr = start.getAttribute('data-metric');
+    return metricAttr ? metricAttr : this.findDataMetricTag(start.parentElement, eventType);
+}</code></pre>
+
+<p>
+In my first attempt, findDataMetricTag was actually 'Tags' because it would always walk up the parents and report any tags found, 
+but this was not actually useful and more performance intensive. Now we have a way to dig out the metric tag!
+</p>
+
+<h3>Tagging elements for metrics</h3>
+<p>
+This is the easiest, but most grueling last part, we will do this in the straightforward way of sticking directly in markup (better ways probably exist). Simply add the data attribute to an element for it to be reported:
+
+</p>
+
+<pre><code class="language-html">&lt;div data-metric=&quot;wizzbang-container-bot&quot;&gt;
+&lt;!-- stuff --&gt;
+&lt;/div&gt;
+
+&lt;button data-metric=&quot;do-thing-button&quot;&gt;
+&lt;/button&gt;</code></pre>
+
+<p>
+Once this is done, if we click on an element we should see the tag reported in console, thats it!
+</p>
+
+<h4>Bonus route information!</h4>
+
+<p>It's often very useful to know which route you are currently on so you don't
+ have to bake it into every single data-metric tag. This is easy to do with
+  Angular's Location service. Inject it and get the current route like so:
+</p>
+
+<pre><code class="language-typescript">import {Location} from '@angular/common';
+
+// .. / .. in class constructor that has `reportEventMetric:
+constructor(private _location: Location) {
+}
+
+// now modify reportEventMetric to print current location like so:
+
+private reportEventMetric(start: EventTarget, evType: string) {
+    // this helper will call a recursive function to rip through DOM
+    const metric = this.findDataMetricTag(start, evType);
+
+    // this will pull out the path of current route, eg '/user' from route
+    const location = this._location.path();
+
+    // once you have metrics, you can POST to server, export to csv,
+    // stick in state, whatever. in this case lets just log em
+    console.log(`route '${location}' ${evType} metric '${metric}'`);
+}
+</code></pre>
+<p>And there you have it, simple metrics ready to stuff in a backing 
+store!</p>
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+</body>
+
+</html>

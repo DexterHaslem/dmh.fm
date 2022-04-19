@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - MPLAB-X gotchas">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - mplab gotchas</title>
+
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+    <script src="https://media.dmh.fm/hljs/highlight.min.js"></script>
+</head>
+
+<body>
+<h1 id="mplab-x-gotchas">MPLAB-X gotchas</h1>
+<p>Date: 07-19-2019</p>
+<p>I&#39;ve been hammering away on an embedded project using a PIC32MZ, using microchips official MPLAB-X ide.</p>
+<p>It&#39;s interesting because it&#39;s netbeans with some embedded enhancements and some genuinely useful additions. But using it with 32 bit microcontrollers, it tends to perform quite awfully. Here is a running list of things I have ran into and want to
+warn others and my future self to not get burned by them again!</p>
+<p>NOTE: These are likely specific to XC32 and PIC32 targets.</p>
+<ol>
+<li>Modifying a project (adding/removing lots of files, etc) structure seems to not correctly regenerate the makefile -&gt; bogus errors until you restart MPLAB X and do a clean build. Painful</li>
+<li>If you have several projects open and debug back and forth between them, the IDE will eventually <strong>stop uploading the latest binary of a project to device</strong>. I couldnt believe it, so i changed my startup log and sure enough I had wasted 10s of build cycles uploading an outdated binary -&gt; restart MPLAB X between project switches. Ideally, only have one project open.</li>
+<li>Placing breakpoints or changing code sometimes ends up with breakpoints at line -1. If you break at top of line, check breakpoints window for these phantom bp</li>
+<li>Memory and program usage bars sometimes do not update, or increase on rebuilds with no changes. Restart, clean and build seems to get more correct values.</li>
+<li><code>add existing items from folders...</code> sometimes skips over sub directories. always check it after adding items to project</li>
+<li>The IDE will not detect C99 reliably, resulting in millions of squigglies</li>
+</ol>
+<p>Other noteworthy crashes, bugs, etc include</p>
+<ol>
+<li>you cannot click memory addresses directly from variables to browse to them in 
+data / execution memory for some awful reason. Copy doesnt work in variable section, but you can copy from the <em>tooltip</em> that pops up.. then manually look it up in target memory views.</li>
+<li>I/O view crashes the entire IDE instantly on OSX. it works on windows and linux but is dog slow on PIC32 devices. Like everything else its several seconds for any operation. And this is on their expensive ICD4 debugger..</li>
+<li>Increasing java memory flag <code>-JXmx</code> for the IDE in (<code>&lt;install&gt;\mplab_platform\etc\mplab_ide.conf</code>) can improve performance but the default is pretty good, seems to scan how much RAM you have. I tried setting it very high on a machine with 32GB of ram, i gave it 12GB and it made MPLAB-X slideshow. 4-8 seems ideal on 32GB ram</li>
+</ol>
+<p>On a side note, interestingly, using MPLABX with smaller PIC products like PIC18, PIC24, PIC16 the ide runs DRAMATICALLY faster and is quite good, so maybe there is hope yet.</p>
+
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+</body>
+
+</html>

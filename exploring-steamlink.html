@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - exploring steam link">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - exploring steam link</title>
+    
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+    <script src="https://media.dmh.fm/hljs/highlight.min.js"></script>
+</head>
+
+<body>
+    <h2>exploring the steam link (part 1)</h2>
+<p>This is a first in a multi-part series on digging into the steam link software and hardware.
+I&#39;m hesitant to call it &#39;reverse engineering&#39; because thankfully, much of the way the steam
+link works is very open and straightforward on a well defined linux setup which is a very nice
+change, and there is not much to it for them to want to hide.</p>
+<h2 id="part-1-gaining-access">Part 1: gaining access</h2>
+<p>Luckily, as above eluded to, this is very simple and nothing of serious effort is needed to
+get root on the steam link. Part one will cover how to get root SSH access with instructions for
+windows users.</p>
+<p>A huge thanks goes to Aaron aka mcd1992, he already found out all the hard parts of this
+in a post a little over a year ago and that is the source of this work, it&#39;s available <a href="http://mcd1992.blogspot.com/2015/10/alright-this-was-lot-easier-than-i.html">here</a>.
+I added a few details that were missing and made sure it worked on latest beta.</p>
+<p>The process is dead simple, but there are a few gotchas which can make things unclear, here&#39;s what you need:</p>
+<ul>
+<li>steam link (duh right?)</li>
+<li>USB drive of literally any size. I did this with an ancient 2GB drive</li>
+<li>way to format USB drive to FAT32/exFAT or ext4. These instructions will be for windows.
+For Linux, I assume you are competent enough to create partitions.
+ext4 works as well as FAT32 for the USB drive.</li>
+</ul>
+<p>Still, with that in mind, it would be fun to look at the internals,
+and maybe see what we can change.</p>
+<h2 id="steps">Steps</h2>
+<ol>
+<li><strong>important:</strong> make sure the first partition of your USB drive is FAT32 or ext4. any size will do.
+If you quickly need to reset a usb stick with a raw image on it, google running DISKPART as admin and doing &#39;select disk #&#39; and then clean.</li>
+<li>On your USB stick partition, simple create the following full path file:
+<code>steamlink/config/system/enable_ssh.txt</code></li>
+<li>Make sure the file is not empty by adding, eg &#39;666&#39; to the file and saving it. encoding doesn&#39;t appear to matter</li>
+<li>Eject your USB stick and plug it into your steam link&#39;s front right USB port. <em>NOT BACK</em></li>
+<li><strong>super important:</strong> completely remove power from the steam link and plug it back in. take effect when off, but not unplugged.</li>
+<li>once steam link has started up again, go to settings-&gt;network and see what the IP is. You should now be able to SSH in.
+the user is &#39;root&#39; and the password is &#39;steamlink&#39;.</li>
+<li>if SSH is still not open, connect to a desktop running steam and try again. This got me bad, I had not synced to a new steam install.</li>
+</ol>
+<blockquote>
+<p>RANDOM OPINIONATED SIDENOTE: Open software/hardware setup is always a net benefit from
+ an engineering standpoint. If you&#39;re making consumer electronics, you&#39;ll never lose an
+ average customer when you go out of the way to lockdown your flash chip holding
+ your firmware or such, ignoring proprietary issues. Same goes for disabling an-already-running-linux
+ device from accepting remote logins. Obviously you have to have some degree of control so you can support
+ your device, but it doesn&#39;t hurt to allow technical users fair use.
+ f you feel you would give up an advantage to a competetor, your hardware
+is probably not very compelling or unique in the first place. Digression over</p>
+</blockquote>
+<h2 id="now-what-">Now what?</h2>
+<p>Lets take a look around and get a lay of the land with <code>ps</code>:</p>
+<pre><code>PID   USER     TIME   COMMAND
+<span class="hljs-number">1</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> init
+<span class="hljs-number">2</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kthreadd]</span>
+<span class="hljs-number">3</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[ksoftirqd/0]</span>
+<span class="hljs-number">4</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kworker/0:0]</span>
+<span class="hljs-number">5</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kworker/0:0H]</span>
+<span class="hljs-number">6</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kworker/u:0]</span>
+<span class="hljs-number">7</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kworker/u:0H]</span>
+<span class="hljs-number">8</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[khelper]</span>
+<span class="hljs-number">9</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kworker/u:1]</span>
+<span class="hljs-number">228</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[bdi-default]</span>
+<span class="hljs-number">230</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kblockd]</span>
+<span class="hljs-number">241</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[khubd]</span>
+<span class="hljs-number">258</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[cfg80211]</span>
+<span class="hljs-number">274</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[rpciod]</span>
+<span class="hljs-number">293</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[khungtaskd]</span>
+<span class="hljs-number">298</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kswapd0]</span>
+<span class="hljs-number">343</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[fsnotify_mark]</span>
+<span class="hljs-number">359</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[unionfs_siod]</span>
+<span class="hljs-number">360</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[nfsiod]</span>
+<span class="hljs-number">364</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[cifsiod]</span>
+<span class="hljs-number">375</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[crypto]</span>
+<span class="hljs-number">524</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[flush-31:10]</span>
+<span class="hljs-number">548</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[krfcommd]</span>
+<span class="hljs-number">606</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[deferwq]</span>
+<span class="hljs-number">616</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[yaffs-bg-1]</span>
+<span class="hljs-number">620</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> /sbin/ueventd
+<span class="hljs-number">741</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kworker/0:1]</span>
+<span class="hljs-number">793</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> sleep <span class="hljs-number">2</span>
+<span class="hljs-number">794</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> ps aux
+<span class="hljs-number">811</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[yaffs-bg-1]</span>
+<span class="hljs-number">842</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[scsi_eh_0]</span>
+<span class="hljs-number">843</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[usb-storage]</span>
+<span class="hljs-number">879</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[yaffs-bg-1]</span>
+<span class="hljs-number">884</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[yaffs-bg-1]</span>
+<span class="hljs-number">948</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[loop0]</span>
+<span class="hljs-number">952</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[jbd2/loop0-8]</span>
+<span class="hljs-number">953</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[ext4-dio-unwrit]</span>
+<span class="hljs-number">969</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kworker/0:1H]</span>
+<span class="hljs-number">987</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kworker/0:2]</span>
+<span class="hljs-number">1077</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[MOAL_HANG_WORK_]</span>
+<span class="hljs-number">1078</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[MOAL_WORK_QUEUE]</span>
+<span class="hljs-number">1079</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[MOAL_RX_WORK_QU]</span>
+<span class="hljs-number">1080</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[woal_reassoc_se]</span>
+<span class="hljs-number">1081</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[ksdioirqd/mmc0]</span>
+<span class="hljs-number">1082</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[kworker/u:1H]</span>
+<span class="hljs-number">1133</span> messageb   <span class="hljs-number">0</span>:<span class="hljs-number">00</span> /usr/bin/dbus-daemon --system --fork
+<span class="hljs-number">1135</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> dbus-daemon --fork --session --print-address
+<span class="hljs-number">1154</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">02</span> {wpa_supplicant.} /bin/ash /etc/init.d/wpa_supplicant.sh
+<span class="hljs-number">1204</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[bt_main_service]</span>
+<span class="hljs-number">1205</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> wpa_supplicant -B -u -c/tmp/wpa_supplicant.conf -Dnl80211 -imlan0
+<span class="hljs-number">1207</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[hci0]</span>
+<span class="hljs-number">1212</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> /usr/libexec/bluetooth/bluetoothd -E
+<span class="hljs-number">1232</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> /usr/bin/pulseaudio
+<span class="hljs-number">1252</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> /usr/sbin/pacrunner
+<span class="hljs-number">1271</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> {connmand.sh} /bin/ash /etc/init.d/connmand.sh
+<span class="hljs-number">1278</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">01</span> connmand -n --wifi=nl80211
+<span class="hljs-number">1297</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> /usr/sbin/sshd
+<span class="hljs-number">1317</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> watchdog -t <span class="hljs-number">2</span> -T <span class="hljs-number">4</span> /dev/watchdog
+<span class="hljs-number">1382</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[galcore workque]</span>
+<span class="hljs-number">1383</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> <span class="hljs-string">[galcore daemon ]</span>
+<span class="hljs-number">1392</span> root       <span class="hljs-number">2</span>:<span class="hljs-number">38</span> ./bin/PE_Single_CPU
+<span class="hljs-number">1393</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> {powermanager.sh} /bin/sh ./bin/powermanager.sh
+<span class="hljs-number">1395</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> /bin/getty -l /bin/login <span class="hljs-number">0</span> console
+<span class="hljs-number">1396</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">06</span> powermanager
+<span class="hljs-number">1441</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> {app_run.sh} /bin/sh /home/steam/app_run.sh
+<span class="hljs-number">1446</span> root       <span class="hljs-number">1</span>:<span class="hljs-number">37</span> shell
+<span class="hljs-number">1532</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> sshd: root@pts/<span class="hljs-number">0</span>
+<span class="hljs-number">1548</span> root       <span class="hljs-number">0</span>:<span class="hljs-number">00</span> -sh
+</code></pre><p>As we can see, valve did a great job running only what is absolutely needed.
+The main area of interest is /etc/init.d/startup folder. You can see how it bootstraps the
+entire user process and what files it checks for overrides, like we did w/ SSH.
+If we take a look at <code>/etc/init.d/startup/S30sshd</code> we can see it sets root password in a strange way if needed</p>
+<pre><code class="lang-sh"><span class="hljs-comment">#</span>
+<span class="hljs-comment"># Script to start sshd if desired</span>
+
+<span class="hljs-keyword">if</span> [ <span class="hljs-_">-f</span> /mnt/config/system/enable_ssh.txt ]; <span class="hljs-keyword">then</span>
+        <span class="hljs-comment"># Generate ssh keys if necessary</span>
+        <span class="hljs-keyword">if</span> [ ! <span class="hljs-_">-f</span> /etc/ssh_host_rsa_key ]; <span class="hljs-keyword">then</span>
+                ssh-keygen -A
+        <span class="hljs-keyword">fi</span>
+
+        <span class="hljs-comment"># Set root password if needed</span>
+        <span class="hljs-keyword">if</span> grep -q <span class="hljs-string">"root::"</span> /etc/passwd; <span class="hljs-keyword">then</span>
+                passwd root &lt;&lt;__EOF__
+steamlink123
+steamlink123
+__EOF__
+        <span class="hljs-keyword">fi</span>
+
+        /usr/sbin/sshd
+<span class="hljs-keyword">fi</span>
+</code></pre>
+<p>An odd thing is the password &#39;steamlink&#39; and both &#39;steamlink123&#39; as seen above work.
+The user interface is bootstrapped by the /home/steam/rc.local file.
+Looking at this, we now know it&#39;s using a Marvell Berlin SoC, which would be no surprise
+if you <a href="http://boilingsteam.com/whats-the-steam-link-made-of/">did your homework unlike me</a></p>
+<p>No frills here really</p>
+<pre><code class="lang-sh"># lsmod
+gal3d <span class="hljs-number">150885</span> <span class="hljs-number">2</span> - Live <span class="hljs-number">0xbf11e000</span>
+gfx <span class="hljs-number">5594</span> <span class="hljs-number">0</span> - Live <span class="hljs-number">0xbf118000</span>
+galois_pe <span class="hljs-number">23250</span> <span class="hljs-number">8</span> - Live <span class="hljs-number">0xbf10d000</span>
+bt8xxx <span class="hljs-number">65343</span> <span class="hljs-number">1</span> - Live <span class="hljs-number">0xbf0f5000</span>
+sd8897 <span class="hljs-number">465471</span> <span class="hljs-number">1</span> - Live <span class="hljs-number">0xbf06c000</span>
+<span class="hljs-number">8897</span>mlan <span class="hljs-number">386305</span> <span class="hljs-number">1</span> sd8897, Live <span class="hljs-number">0xbf000000</span> (P)
+#
+</code></pre>
+<pre><code class="lang-sh"><span class="hljs-meta"># cat /home/steam/controller/NOTES.txt</span>
+
+d0g_dongle_steamlink.hex  - Valve dongle firmware <span class="hljs-keyword">for</span> <span class="hljs-keyword">internal</span> dongle
+d0g_dongle.hex - Valve dongle firmware <span class="hljs-keyword">for</span> external dongle
+<span class="hljs-meta">#</span>
+</code></pre>
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+</body>
+
+</html>

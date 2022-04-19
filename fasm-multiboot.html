@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - FASM multiboot elf kernel stub">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - FASM multiboot elf kernel</title>
+
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+</head>
+
+<h1 id="creating-multiboot-elf-kernels-with-fasm">Creating multiboot ELF kernels with FASM</h1>
+<p>I&#39;ve been meaning to write about this one for a while, since I hacked together some simple OSes last summer! Multiboot is magical.</p>
+<p>Multiboot is a specification that provides a standard format for bootloaders to load kernels.</p>
+<p>The most common (and in fact only I know of) implementation is unsurprisingly GRUB. There is actually
+two multiboot specifications at this time:</p>
+<ul>
+<li>Multiboot 1 (1995)</li>
+<li>Multiboot 2 (somewhere around ~2007)</li>
+</ul>
+<p>I will cover creating a multiboot 1 loadable 32 bit kernel using FASM.
+The killer nice thing is, you can boot an ELF directly with Multiboot.</p>
+<h2 id="prerequisites">Prerequisites</h2>
+<ul>
+<li>Knowledge of x86 assembly in intel syntax</li>
+<li>FASM: available on windows and linux. written w/ 1.71.62</li>
+<li>QEMU: qemu system i386 is required if you want to try booting it</li>
+</ul>
+<p>A basic knowledge of ELF layout is strongly recommended.
+If you are not familiar with ELF format layout sections,
+this may be a bit foreign, I recommend at least skimming
+an overview of the sections, <a href="https://wiki.osdev.org/ELF">here</a> is a good overview. Ange Albertini (of corkami.com) has amazing poster graphics as well <a href="https://imgur.com/a/JEObT">here</a>.</p>
+<h2 id="creating-an-elf-with-fasm">Creating an ELF with FASM</h2>
+<p>I have to admit the assembler I remember how to use well enough anymore is FASM, so I will cover how to generate a bootable elf with it.
+It is probably easy enough to translate mnemonics to nasm or gas if you have the docs handy.
+One benefit of using FASM is it handles linkage for you so you can assemble a working binary
+in a single step. However, NASM is more popular.</p>
+<p>Our first step is to generate an ELF, lets do that first.
+This will make a buildable empty ELF:</p>
+<pre><code class="lang-x86asm">format elf <span class="hljs-comment">; you can use elf or binary with mb kludge</span>
+<span class="hljs-keyword">org </span><span class="hljs-number">0x100000</span> <span class="hljs-comment">; this will be your kernel reserved memory</span>
+use32 <span class="hljs-comment">; 32 bit</span>
+<span class="hljs-symbol">
+_start:</span>
+<span class="hljs-comment">; we will add multiboot header here!</span>
+<span class="hljs-symbol">
+_kstart:</span>
+<span class="hljs-comment">; kernel here</span>
+
+<span class="hljs-comment">; data here</span>
+<span class="hljs-symbol">_end_data:</span>
+<span class="hljs-comment">; bss section here</span>
+
+<span class="hljs-comment">; reserve bytes for kernel stack</span>
+rb <span class="hljs-number">16384</span>
+<span class="hljs-symbol">_kstack:</span>
+<span class="hljs-symbol">
+_end:</span>
+</code></pre>
+<h2 id="check-your-work-pt-1">Check your work pt 1</h2>
+<p>Save this file as <code>kernel1.asm</code>
+Make sure you didnt typo it by trying to compile it:</p>
+<pre><code class="lang-shell">$ fasm kernel1.asm
+flat assembler  version <span class="hljs-number">1.71</span><span class="hljs-number">.62</span>  (<span class="hljs-number">1048576</span> kilobytes memory)
+<span class="hljs-number">2</span> passes, <span class="hljs-number">16683</span> bytes.
+</code></pre>
+<p>If you get no errors (and a kernel1.o) it worked.
+We can now move on to adding a multiboot header!</p>
+<h2 id="header-magic">Header magic</h2>
+<p>The only thing you have to do for a binary to be loadable is include a correctly formatted header (and add it to your grub list).
+Importantly you do not need to fill out the complete header.
+I&#39;ve recreated the multiboot 1 header here:</p>
+<table>
+<thead>
+<tr>
+<th>Offset</th>
+<th>Type</th>
+<th>Field name</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>u32</td>
+<td>magic</td>
+<td><strong>required</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td>u32</td>
+<td>flags</td>
+<td><strong>required</strong></td>
+</tr>
+<tr>
+<td>8</td>
+<td>u32</td>
+<td>checksum</td>
+<td><strong>required</strong></td>
+</tr>
+<tr>
+<td>12</td>
+<td>u32</td>
+<td>header_addr</td>
+<td>present if <strong>flags[16]</strong> set</td>
+</tr>
+<tr>
+<td>16</td>
+<td>u32</td>
+<td>load_addr</td>
+<td>present if <strong>flags[16]</strong> set</td>
+</tr>
+<tr>
+<td>20</td>
+<td>u32</td>
+<td>load_end_addr</td>
+<td>present if <strong>flags[16]</strong> set</td>
+</tr>
+<tr>
+<td>24</td>
+<td>u32</td>
+<td>bss_end_addr</td>
+<td>present if <strong>flags[16]</strong> set</td>
+</tr>
+<tr>
+<td>28</td>
+<td>u32</td>
+<td>entry_addr</td>
+<td>present if <strong>flags[16]</strong> set</td>
+</tr>
+<tr>
+<td>32</td>
+<td>u32</td>
+<td>mode_type</td>
+<td>present if <strong>flags[2]</strong> set</td>
+</tr>
+<tr>
+<td>36</td>
+<td>u32</td>
+<td>width</td>
+<td>present if <strong>flags[2]</strong> set</td>
+</tr>
+<tr>
+<td>40</td>
+<td>u32</td>
+<td>height</td>
+<td>present if <strong>flags[2]</strong> set</td>
+</tr>
+<tr>
+<td>44</td>
+<td>u32</td>
+<td>depth</td>
+<td>present if <strong>flags[2]</strong> set</td>
+</tr>
+</tbody>
+</table>
+<p>You can see the multiboot1 docs <a href="https://www.gnu.org/software/grub/manual/multiboot/multiboot.html#OS-image-format">here</a>, as well as full <a href="http://git.savannah.gnu.org/cgit/grub.git/tree/doc/multiboot.texi?h=multiboot">latest specification</a>, scroll to &#39;Boot information format&#39;</p>
+<p>The idea is to setup magic, flags, checksum correctly.
+You toggle certain flags to have multiboot fill out fields
+you are interested in and let it know what it is loading.</p>
+<h2 id="adding-multiboot-header">Adding multiboot header</h2>
+<p>To make the ELF we created above bootable, we need to
+fill out the multiboot header. It needs to be the first
+thing in the binary the multiboot loader will see.
+This means we need to stick it directly under <code>_start</code> and
+that is why there is <code>_start</code> and <code>_kstart</code>.</p>
+<p>I will present the entire filled out header below.
+Add it below the <code>_start</code> label we created before.
+Save this file as <code>kernel2.asm</code> to keep track
+of our work.</p>
+<pre><code class="lang-x86asm"><span class="hljs-comment">; ... snip</span>
+<span class="hljs-symbol">
+_start:</span>
+<span class="hljs-comment">; this is the multiboot header</span>
+mbflags=<span class="hljs-number">0x03</span> <span class="hljs-keyword">or </span>(<span class="hljs-number">1</span> <span class="hljs-keyword">shl </span><span class="hljs-number">16</span>)
+dd <span class="hljs-number">0x1BADB002</span>
+dd mbflags   <span class="hljs-comment">; 4k alignment, provide meminfo</span>
+dd -<span class="hljs-number">0x1BADB002</span>-mbflags    <span class="hljs-comment">; mb checksum</span>
+    dd _start        <span class="hljs-comment">; header_addr</span>
+    dd _start        <span class="hljs-comment">; load_addr</span>
+    dd _end_data    <span class="hljs-comment">; load_end_addr</span>
+    dd _end         <span class="hljs-comment">; bss_end_addr</span>
+    dd _kstart         <span class="hljs-comment">; entry point</span>
+<span class="hljs-comment">; end mb header</span>
+</code></pre>
+<p>Here is an explanation of what each line is accomplishing</p>
+<pre><code class="lang-x86asm">mbflags=<span class="hljs-number">0x03</span> or (<span class="hljs-number">1</span> shl <span class="hljs-number">16</span>)
+</code></pre>
+<p>This is taking 0x03 and bitwise or&#39;ing it with (1 &lt;&lt; 16).
+1 shifted left 16 is 65536.</p>
+<p>in other words It is taking these two binary values
+(shown as 16 bit/u16 since thats all we need):</p>
+<p>(Note: this is <strong>BIG ENDIAN</strong> / logical)</p>
+<pre><code><span class="hljs-number">0</span>x03: <span class="hljs-number">1100 0000</span> <span class="hljs-number">0000 0000</span>
+(<span class="hljs-number">1</span> shl <span class="hljs-number">16</span>): <span class="hljs-number">0000 0000</span> <span class="hljs-number">0000 0001</span>
+</code></pre><p>bitwise or&#39;d: <code>1100 0000 0000 0001</code></p>
+<p>Following the multiboot <a href="https://www.gnu.org/software/grub/manual/multiboot/multiboot.html#Boot-information-format">docs</a>,</p>
+<p>we have set the following bits:</p>
+<ul>
+<li>bit 0 (MULTIBOOT_ALIGN): align on page boundaries</li>
+<li>bit 1 (MULTIBOOT<em>MEMINFO): fill out the mem</em>* fields of the header</li>
+<li>bit 16 (MULTIBOOT_AOUT_KLUDGE):  fields at 12-28 of MB header are valid, use those over the ELF header to determine loading addresses.</li>
+</ul>
+<p>The big gotcha for me said bit 16 is not required for ELF
+format kernels:</p>
+<pre><code>This information <span class="hljs-keyword">does</span> <span class="hljs-keyword">not</span> need <span class="hljs-keyword">to</span> be provided <span class="hljs-keyword">if</span> <span class="hljs-keyword">the</span> kernel image <span class="hljs-keyword">is</span> <span class="hljs-keyword">in</span> elf format, <span class="hljs-keyword">but</span> <span class="hljs-keyword">it</span> must be provided <span class="hljs-keyword">if</span> <span class="hljs-keyword">the</span> images <span class="hljs-keyword">is</span> <span class="hljs-keyword">in</span> a.out format <span class="hljs-keyword">or</span> <span class="hljs-keyword">in</span> <span class="hljs-keyword">some</span> other format.
+(which <span class="hljs-keyword">is</span> known <span class="hljs-keyword">in</span> sources <span class="hljs-keyword">as</span> `MULTIBOOT_AOUT_KLUDGE`)
+</code></pre><p>I always had to provide it even with the above ELF, Im unsure
+if I built the sections incorrectly or otherwise, but all online sources I could find did same when building ELF kernels.</p>
+<p>We will put these flags in header later on.</p>
+<pre><code class="lang-x86asm"><span class="hljs-selector-tag">dd</span> <span class="hljs-number">0</span>x1BADB002
+</code></pre>
+<p>this satisifes the &#39;magic&#39; part of the header for multiboot1</p>
+<pre><code class="lang-x86asm"><span class="hljs-selector-tag">dd</span> mbflags
+</code></pre>
+<p>Put our flags we set above in the right spot</p>
+<pre><code class="lang-x86asm"><span class="hljs-selector-tag">dd</span> -<span class="hljs-number">0</span>x1BADB002-mbflags
+</code></pre>
+<p>This is a tricky way to set the checksum of the 3 required fields which needs to be 0 mod 2^32.</p>
+<p>I will breeze over the rest, loading our <code>_start</code>,<code>_end_data</code>,
+<code>_end</code> and <code>_kstart</code> addresses into the header with dd lets
+multiboot our elf sections and where to jump to after loading.</p>
+<p>That&#39;s it (phew)!</p>
+<p>Lets a hlt in _kstart:</p>
+<pre><code class="lang-x86asm"><span class="hljs-symbol">_kstart:</span>
+hlt
+</code></pre>
+<p>This gives an effective memory address in our kstart label.</p>
+<h2 id="check-your-work-pt-2">Check your work pt 2</h2>
+<p>Make sure we can assemble:</p>
+<pre><code class="lang-shell">$ fasm kernel2.asm
+flat assembler  version <span class="hljs-number">1.71</span><span class="hljs-number">.62</span>  (<span class="hljs-number">1048576</span> kilobytes memory)
+<span class="hljs-number">2</span> passes, <span class="hljs-number">16683</span> bytes.
+</code></pre>
+<p>In theory, this kernel2.o is actually bootable but we won&#39;t be
+able to tell because it will hang with the QEMU boot messages
+still visible.</p>
+<h2 id="add-some-video-functionality">Add some video functionality</h2>
+<p>Lets add some basic video memory functionality, I will not
+cover this in detail, I will provide working code,
+but its an exercise for the reader.</p>
+<p>It will clear the framebuffer and write a message, confirming
+we did actually load and jump to our _kstart code.</p>
+<p>here is the full listing with a hello world:</p>
+<pre><code class="lang-x86asm"><span class="hljs-comment">; fasm multiboot example</span>
+<span class="hljs-comment">; this shows how to use elf (or bin if you want)</span>
+<span class="hljs-comment">; fasm output with a multiboot header with grub</span>
+
+format elf <span class="hljs-comment">; you can use elf or binary with mb kludge</span>
+org <span class="hljs-number">0x100000</span>
+<span class="hljs-meta">use32</span>
+<span class="hljs-symbol">
+_start:</span>
+<span class="hljs-comment">; this is the multiboot header</span>
+mbflags=<span class="hljs-number">0x03</span> <span class="hljs-keyword">or</span> (<span class="hljs-number">1</span> <span class="hljs-keyword">shl</span> <span class="hljs-number">16</span>)
+<span class="hljs-built_in">dd</span> <span class="hljs-number">0x1BADB002</span>
+<span class="hljs-built_in">dd</span> mbflags   <span class="hljs-comment">; 4k alignment, provide meminfo</span>
+<span class="hljs-built_in">dd</span> -<span class="hljs-number">0x1BADB002</span>-mbflags    <span class="hljs-comment">; mb checksum</span>
+    <span class="hljs-built_in">dd</span> _start        <span class="hljs-comment">; header_addr</span>
+    <span class="hljs-built_in">dd</span> _start        <span class="hljs-comment">; load_addr</span>
+    <span class="hljs-built_in">dd</span> _end_data    <span class="hljs-comment">; load_end_addr</span>
+    <span class="hljs-built_in">dd</span> _end         <span class="hljs-comment">; bss_end_addr</span>
+    <span class="hljs-built_in">dd</span> _kstart         <span class="hljs-comment">; entry point</span>
+<span class="hljs-comment">; end mb header</span>
+
+<span class="hljs-comment">; code</span>
+<span class="hljs-symbol">_kstart:</span>
+    <span class="hljs-comment">; set stack right away</span>
+    <span class="hljs-keyword">mov</span> <span class="hljs-built_in">esp</span>, _kstack
+
+    <span class="hljs-comment">; grub sets up 80x25 mode for us</span>
+    <span class="hljs-keyword">mov</span> <span class="hljs-built_in">edi</span>, <span class="hljs-number">0xB8000</span> <span class="hljs-comment">; video memory</span>
+
+    <span class="hljs-comment">; the screen data is left as is, showing</span>
+    <span class="hljs-comment">; qemu boot messages and crap, so clear it out</span>
+
+    <span class="hljs-comment">; since we dont care about the actual</span>
+    <span class="hljs-comment">; rows and heights we can just linearly nuke the total</span>
+    <span class="hljs-comment">; num of bytes:</span>
+    <span class="hljs-comment">; 80x25 = 2000 chars,</span>
+    <span class="hljs-comment">; each visible char has a value byte and display control byte</span>
+    <span class="hljs-comment">; so total bytes = 2000 * 2, 4000 bytes</span>
+    <span class="hljs-comment">; however we can simplify this by setting a full 32 bits each</span>
+    <span class="hljs-comment">; loop (4 bytes or 2 chars)</span>
+    <span class="hljs-keyword">mov</span> <span class="hljs-built_in">ecx</span>, <span class="hljs-number">1000</span>
+    <span class="hljs-keyword">cld</span>
+    @@:
+        <span class="hljs-comment">; set 1F control bytes, 0x00 text bytes</span>
+        <span class="hljs-keyword">mov</span> <span class="hljs-built_in">dword</span> [<span class="hljs-built_in">edi</span> + <span class="hljs-built_in">ecx</span> * <span class="hljs-number">4</span>], <span class="hljs-number">0x1F001F00</span>
+    <span class="hljs-keyword">loop</span> @b
+
+    <span class="hljs-comment">; now display a message before halting</span>
+    <span class="hljs-keyword">mov</span> <span class="hljs-built_in">esi</span>,msg
+    <span class="hljs-keyword">mov</span> <span class="hljs-built_in">ecx</span>,msglen
+    @@:
+        <span class="hljs-keyword">lodsb</span>
+        <span class="hljs-keyword">stosb</span>
+        <span class="hljs-keyword">mov</span> <span class="hljs-built_in">byte</span> [<span class="hljs-built_in">edi</span>], <span class="hljs-number">0x1F</span>
+        <span class="hljs-keyword">inc</span> <span class="hljs-built_in">edi</span>
+    <span class="hljs-keyword">loop</span> @b
+
+    <span class="hljs-keyword">hlt</span>
+
+<span class="hljs-comment">; data section</span>
+msg <span class="hljs-built_in">db</span> <span class="hljs-string">'hello from a multiboot elf'</span>
+msglen = $ - msg
+<span class="hljs-symbol">
+_end_data:</span>
+
+<span class="hljs-comment">; bss uninit data here</span>
+
+
+<span class="hljs-comment">; reserve the number of bytes of how big you want the kernel stack to be</span>
+rb <span class="hljs-number">16384</span>
+<span class="hljs-symbol">_kstack:</span>
+<span class="hljs-symbol">
+
+_end:</span>
+</code></pre>
+<p>Save it as <code>kernel3.asm</code></p>
+<p>Lets assemble and boot it!</p>
+<pre><code class="lang-shell">$ fasm kernel3.asm
+flat assembler  version <span class="hljs-number">1.71</span><span class="hljs-number">.62</span>  (<span class="hljs-number">1048576</span> kilobytes memory)
+<span class="hljs-number">2</span> passes, <span class="hljs-number">16683</span> bytes.
+$ qemu-system-i386 -kernel kernel3.o
+</code></pre>
+<p>Amazing!</p>
+<p><img src="https://media.dmh.fm/multiboot_qemu.png" alt="multiboot"></p>
+<p>If you got stuck, full sources and a script to make bootable as an ISO using el-torito (covered later on) is available on
+my <a href="https://github.com/DexterHaslem/fasm-multiboot">github</a></p>
+<h3 id="next-steps-and-other-resources">next steps and other resources</h3>
+<p>Understanding writing to the video memory above: <a href="https://wiki.osdev.org/Printing_To_Screen">https://wiki.osdev.org/Printing_To_Screen</a></p>
+<p><a href="https://stackoverflow.com/questions/33488194/creating-a-simple-multiboot-kernel-loaded-with-grub2#33493729">NASM version</a></p>
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+    </body>
+    
+</html>    

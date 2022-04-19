@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - webcam booster">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - webcam shim booster</title>
+</head>
+
+<body>
+    <h3>Webcam booster shim thingy</h3>
+    <p>I have had a bit of a problem. My webcam front fin is long enough it hangs past the bevel section of my monitor.
+        It leaves an iPhone-esque notch pattern blocking the view. I have put up with this for years and decided to stick
+        something underneith it to raise it up out of the way (vs cutting the fin down).</p>
+
+        <h4>Picture of the problem</h4>
+        <img class="inline-img" src="https://media.dmh.fm/wcbooster/problem.png" 
+        alt="image of the problem, showing webcam covering monitor where it sits" >
+        
+
+    <p>Much to my surprise, I didnt have anything of the appropriate size to simply stick under it. So of course,
+        I measured it. 
+        <p>Measurements:
+            <ul>
+                <li>top of the monitor width: 15mm</li>
+                <li>webcam landing area: 45mmx50mm deep.</li>
+                <li>overhang: 5mm for my monitor bezel</li>
+            </ul>
+    so a 40x10x5mm (wxdxh) rectangle should do the trick.
+    20 minutes creating a rectangle with two constraints in FreeCAD, which would have taken
+    someone who's used the software before 0.1 seconds. <em>Extremely</em> advanced stuff here!</p>
+    <h5>Ultra extreme FreeCAD design</h5>
+    <img class="inline-img" src="https://media.dmh.fm/wcbooster/freecad1.png"
+    alt="simple rectangle in freecad">
+
+    <h5>Then I sliced it.. </h5>
+    <img class="inline-img" src="https://media.dmh.fm/wcbooster/sliced.png"
+        lt="a rectangle sliced in prusaslicer">
+
+    <h5>and printed it.. </h5>
+    <img class="inline-img" src="https://media.dmh.fm/wcbooster/printing.png"
+        lt="a rectangle sliced in prusaslicer">
+    <p>Took a whopping 8 minutes as you could imagine.
+        <aside>I love this ultra cheap ($200 at the time) FLsun Q5 delta printer</aside>
+    </p>
+
+    <h5>Success</h5>
+    <img class="inline-img" src="https://media.dmh.fm/wcbooster/success.png"
+        lt="a rectangle sliced in prusaslicer">
+    <p>Sometimes it feels good to overkill fix the small stuff</p>
+
+    <p>The source files (freecad project, stl, and gcode - 20% infill 0.20mm) are 
+        <a href="https://media.dmh.fm/wcbooster/wcbooster.zip">here</a>
+         if anyone has same webcam and wants to save time 
+        with the base measurements</p>
+
+    <section class="back-hdr">
+        <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+    </section>
+
+</body>
+
+</html>

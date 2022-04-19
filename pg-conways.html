@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - Game of life PL/pgsql">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - Conways game of life PL/pgSQL</title>
+
+    <link rel="stylesheet"
+      href="https://media.dmh.fm/hljs/styles/vs.min.css">
+    <script src="https://media.dmh.fm/hljs/highlight.min.js"></script>
+</head>
+
+<body>
+    <h2>game of life in PL/pgSQL</h2> <aside><em>why not</em></aside>
+    <h3 id="background">Background</h3>
+<p>I recently started learning the details of PL/pgSQL.
+It actually started with me wanting to learn Oracle PL/SQL but giving up
+after looking at licensing costs and having a stellar time not getting
+Oracle XE running on a debian box.</p>
+<p>The Oracle fetish makes no sense because I use PostgreSQL every day at work,
+interest in Ada for defense contracting work, and its got similarities to PL/SQL
+for free anyway. And you can run it on a free amazon RDS if you&#39;re lazy.</p>
+<p>Learning things like PL/pgSQL, T-SQL etc is really useful even if you only have
+a laymans handling of the database side of your tech stack because you can greatly
+reduce the amount of round trips in your data access objects/repos/entities and
+implement &#39;data logic&#39; with no client/server roundtrips. Being able to
+effenciently create a table that matches your DTO will make the poor soul
+who is cranking out spring code really like you, too.</p>
+<p>It&#39;s well known on the internet if you want to solicit
+advice from experts for <em>free</em> you can do a few things:</p>
+<ol>
+<li>claim another technology is superior due to issues you&#39;re running into</li>
+<li>find the most egregious misuse of the thing you can possibly think of</li>
+</ol>
+<p>This post is mostly about the latter - implementing <a href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life">Conway&#39;s game of life</a>
+in naive PL/pgSQL functions. It&#39;s a good candidate (of misuse) because the game rules
+are simple and can be represented easily by an array.
+Processing large arrays in PL/pgSQL is not a good idea. Perfect!</p>
+<h3 id="implementation">Implementation</h3>
+<p>The idea is simple, the game state is represented by a <code>bool[]</code> type which
+is actually multi-dimensioned to the universe size. eg, a 3x3 universe would look
+like this (in postgres array literal format):</p>
+<pre><code>{{<span class="hljs-literal">false</span>,<span class="hljs-literal">false</span>,<span class="hljs-literal">false</span>},{<span class="hljs-literal">false</span>,<span class="hljs-literal">false</span>,<span class="hljs-literal">false</span>},{<span class="hljs-literal">false</span>,<span class="hljs-literal">false</span>,<span class="hljs-literal">false</span>}}
+</code></pre><p>The majority of the code is size x size loops filling out/reading the array.
+There is nothing too special about an of the code. The neighbor counting and
+rules logic are probably the only interesting pieces.</p>
+<p>After running the full script, to generate a game run the following query:</p>
+<p><code>SELECT life.game_of_life(12);</code></p>
+<p>where 12 is the board size you would like. note the game output will be
+in your SQL log, <em>not</em> the query result. It&#39;s currently hard coded to be
+uniform size but could easily be changed. One limitation is changing size
+requires dropping the current state table to really work right.</p>
+<p>In usage it should look something like this (pictured is datagrip).
+<img src="https://media.dmh.fm/life_queries.png" alt="SQL notice strings"></p>
+<p>The print_state function uses &#39;X&#39; for live cells and &#39; &#39; for dead, this should probably be something better!</p>
+<p>Below is the <a href="https://raw.githubusercontent.com/DexterHaslem/game-of-life-plpgsql/master/life.sql">full code</a>,
+or the <a href="https://gist.github.com/DexterHaslem/1bf97ac3bcb6aad70696ff794fcfbaef">gist</a>.
+</p>
+
+<pre><code class="lang-pgsql">
+<span class="hljs-keyword">CREATE</span> SCHEMA <span class="hljs-keyword">IF</span> <span class="hljs-keyword">NOT</span> EXISTS life;
+<span class="hljs-keyword">SET</span> search_path = life;
+
+<span class="hljs-keyword">CREATE</span> TABLE <span class="hljs-keyword">IF</span> <span class="hljs-keyword">NOT</span> EXISTS life.state (
+generation SERIAL PRIMARY KEY <span class="hljs-keyword">NOT</span> NULL,
+--size       INT             <span class="hljs-keyword">NOT</span> NULL CHECK (size &gt;= <span class="hljs-number">3</span>),
+state      BOOL []
+);
+
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> REPLACE <span class="hljs-function"><span class="hljs-keyword">FUNCTION</span> <span class="hljs-title">life</span>.<span class="hljs-title">neighbor_alive_count</span><span class="hljs-params">(u BOOL [], x INT, y INT)</span>
+<span class="hljs-title">RETURNS</span> <span class="hljs-title">INT</span> <span class="hljs-title">AS</span> $$
+<span class="hljs-title">DECLARE</span>
+<span class="hljs-title">ac</span> <span class="hljs-title">INT</span> :</span>= <span class="hljs-number">0</span>;
+<span class="hljs-keyword">BEGIN</span>
+<span class="hljs-keyword">FOR</span> xo <span class="hljs-keyword">IN</span> -<span class="hljs-number">1</span>..<span class="hljs-number">1</span> <span class="hljs-keyword">LOOP</span>
+    <span class="hljs-keyword">FOR</span> yo <span class="hljs-keyword">IN</span> -<span class="hljs-number">1</span>..<span class="hljs-number">1</span> <span class="hljs-keyword">LOOP</span>
+    <span class="hljs-keyword">IF</span> xo = <span class="hljs-number">0</span> <span class="hljs-keyword">AND</span> yo = <span class="hljs-number">0</span>
+    <span class="hljs-keyword">THEN</span>
+        -- dont count ourselves <span class="hljs-keyword">as</span> a neighbor
+        <span class="hljs-keyword">CONTINUE</span>;
+    <span class="hljs-keyword">END</span> <span class="hljs-keyword">IF</span>;
+    -- we get off easy here, going <span class="hljs-keyword">out</span> <span class="hljs-keyword">of</span> bounds returns &lt;NULL&gt;
+    <span class="hljs-keyword">IF</span> u [x + xo] [y + yo]
+    <span class="hljs-keyword">THEN</span>
+        ac := ac + <span class="hljs-number">1</span>;
+    <span class="hljs-keyword">END</span> <span class="hljs-keyword">IF</span>;
+    <span class="hljs-keyword">END</span> <span class="hljs-keyword">LOOP</span>;
+<span class="hljs-keyword">END</span> <span class="hljs-keyword">LOOP</span>;
+
+RETURN ac;
+<span class="hljs-keyword">END</span>;
+$$ LANGUAGE plpgsql IMMUTABLE <span class="hljs-keyword">STRICT</span>;
+
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> REPLACE <span class="hljs-function"><span class="hljs-keyword">FUNCTION</span> <span class="hljs-title">life</span>.<span class="hljs-title">next_cell_state</span><span class="hljs-params">(cur BOOL, alive_nb INT)</span>
+<span class="hljs-title">RETURNS</span> <span class="hljs-title">BOOL</span> <span class="hljs-title">AS</span> $$
+<span class="hljs-title">BEGIN</span>
+<span class="hljs-title">RETURN</span> <span class="hljs-params">(<span class="hljs-keyword">NOT</span> cur <span class="hljs-keyword">AND</span> alive_nb = 3)</span> <span class="hljs-title">OR</span> <span class="hljs-title">alive_nb</span> = 2 <span class="hljs-title">OR</span> <span class="hljs-title">alive_nb</span> = 3;</span>
+<span class="hljs-keyword">END</span>;
+$$ LANGUAGE plpgsql;
+
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> REPLACE <span class="hljs-function"><span class="hljs-keyword">FUNCTION</span> <span class="hljs-title">life</span>.<span class="hljs-title">next_universe</span><span class="hljs-params">(cur_uv BOOL [])</span>
+<span class="hljs-title">RETURNS</span> <span class="hljs-title">BOOL</span> [] <span class="hljs-title">AS</span> $$
+<span class="hljs-title">DECLARE</span>
+<span class="hljs-title">xl</span>     <span class="hljs-title">INT</span> :</span>= array_length(cur_uv, <span class="hljs-number">1</span>);
+yl     INT := array_length(cur_uv, <span class="hljs-number">2</span>);
+new_uv BOOL [] := array_fill(<span class="hljs-keyword">FALSE</span>, <span class="hljs-keyword">ARRAY</span> [xl, yl]);
+<span class="hljs-keyword">BEGIN</span>
+<span class="hljs-keyword">FOR</span> x <span class="hljs-keyword">IN</span> <span class="hljs-number">1</span>..xl <span class="hljs-keyword">LOOP</span>
+    <span class="hljs-keyword">FOR</span> y <span class="hljs-keyword">IN</span> <span class="hljs-number">1</span>..yl <span class="hljs-keyword">LOOP</span>
+    new_uv [x] [y] = life.next_cell_state(cur_uv [x] [y], life.neighbor_alive_count(cur_uv, x, y));
+    <span class="hljs-keyword">END</span> <span class="hljs-keyword">LOOP</span>;
+<span class="hljs-keyword">END</span> <span class="hljs-keyword">LOOP</span>;
+RETURN new_uv;
+<span class="hljs-keyword">END</span>;
+$$ LANGUAGE plpgsql IMMUTABLE <span class="hljs-keyword">STRICT</span>;
+
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> REPLACE <span class="hljs-function"><span class="hljs-keyword">FUNCTION</span> <span class="hljs-title">life</span>.<span class="hljs-title">create_universe</span><span class="hljs-params">(size INT, fillrandom BOOL)</span>
+<span class="hljs-title">RETURNS</span> <span class="hljs-title">BOOL</span> [] <span class="hljs-title">AS</span> $$
+<span class="hljs-title">DECLARE</span>
+<span class="hljs-title">ret</span> <span class="hljs-title">BOOL</span> [] :</span>= NULL;
+<span class="hljs-keyword">BEGIN</span>
+ret = array_fill(<span class="hljs-keyword">FALSE</span>, <span class="hljs-keyword">ARRAY</span> [size, size]);
+<span class="hljs-keyword">IF</span> fillrandom
+<span class="hljs-keyword">THEN</span>
+    <span class="hljs-keyword">FOR</span> x <span class="hljs-keyword">IN</span> <span class="hljs-number">1</span>..size <span class="hljs-keyword">LOOP</span>
+    <span class="hljs-keyword">FOR</span> y <span class="hljs-keyword">IN</span> <span class="hljs-number">1</span>..size <span class="hljs-keyword">LOOP</span>
+        ret [x] [y] = (random() * <span class="hljs-number">100</span>) :: INT % <span class="hljs-number">2</span> = <span class="hljs-number">0</span>;
+    <span class="hljs-keyword">END</span> <span class="hljs-keyword">LOOP</span>;
+    <span class="hljs-keyword">END</span> <span class="hljs-keyword">LOOP</span>;
+<span class="hljs-keyword">END</span> <span class="hljs-keyword">IF</span>;
+RETURN ret;
+<span class="hljs-keyword">END</span>;
+$$ LANGUAGE plpgsql;
+
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> REPLACE <span class="hljs-function"><span class="hljs-keyword">FUNCTION</span> <span class="hljs-title">life</span>.<span class="hljs-title">print_state</span><span class="hljs-params">(state BOOL [])</span>
+<span class="hljs-title">RETURNS</span> <span class="hljs-title">VOID</span> <span class="hljs-title">AS</span> $$
+<span class="hljs-title">DECLARE</span>
+<span class="hljs-title">line</span> <span class="hljs-title">TEXT</span> :</span>= <span class="hljs-string">''</span>;
+<span class="hljs-keyword">BEGIN</span>
+<span class="hljs-keyword">FOR</span> x <span class="hljs-keyword">IN</span> <span class="hljs-number">1</span>..array_length(state, <span class="hljs-number">1</span>) <span class="hljs-keyword">LOOP</span>
+    <span class="hljs-keyword">FOR</span> y <span class="hljs-keyword">IN</span> <span class="hljs-number">1</span>..array_length(state, <span class="hljs-number">2</span>) <span class="hljs-keyword">LOOP</span>
+    <span class="hljs-keyword">IF</span> state [x] [y]
+    <span class="hljs-keyword">THEN</span>
+        line := <span class="hljs-keyword">concat</span>(line, <span class="hljs-string">'X '</span>);
+    <span class="hljs-keyword">ELSE</span>
+        line := <span class="hljs-keyword">concat</span>(line, <span class="hljs-string">'  '</span>);
+    <span class="hljs-keyword">END</span> <span class="hljs-keyword">IF</span>;
+    <span class="hljs-keyword">END</span> <span class="hljs-keyword">LOOP</span>;
+    <span class="hljs-keyword">RAISE</span> NOTICE <span class="hljs-string">'%'</span>, line;
+    line := <span class="hljs-string">''</span>;
+<span class="hljs-keyword">END</span> <span class="hljs-keyword">LOOP</span>;
+<span class="hljs-keyword">END</span>;
+$$ LANGUAGE plpgsql;
+
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> REPLACE VIEW life.most_recent_state <span class="hljs-keyword">AS</span>
+<span class="hljs-keyword">SELECT</span> s.state
+<span class="hljs-keyword">FROM</span> life.state s
+<span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> s.generation <span class="hljs-keyword">DESC</span>
+LIMIT <span class="hljs-number">1</span>;
+
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">OR</span> REPLACE <span class="hljs-function"><span class="hljs-keyword">FUNCTION</span> <span class="hljs-title">life</span>.<span class="hljs-title">game_of_life</span><span class="hljs-params">(boardsize INT)</span>
+<span class="hljs-title">RETURNS</span> <span class="hljs-title">VOID</span> <span class="hljs-title">AS</span> $$
+<span class="hljs-title">BEGIN</span>
+
+<span class="hljs-title">IF</span> <span class="hljs-title">NOT</span> <span class="hljs-title">exists</span><span class="hljs-params">(<span class="hljs-keyword">SELECT</span> 1
+                <span class="hljs-keyword">FROM</span> life.most_recent_state)</span>
+<span class="hljs-title">THEN</span>
+    <span class="hljs-title">INSERT</span> <span class="hljs-title">INTO</span> <span class="hljs-title">life</span>.<span class="hljs-title">state</span> <span class="hljs-params">(state)</span> <span class="hljs-title">SELECT</span> <span class="hljs-title">life</span>.<span class="hljs-title">create_universe</span><span class="hljs-params">(boardsize, <span class="hljs-keyword">TRUE</span>)</span>;</span>
+<span class="hljs-keyword">ELSE</span>
+    INSERT <span class="hljs-keyword">INTO</span> life.state (state) <span class="hljs-keyword">SELECT</span> life.next_universe((<span class="hljs-keyword">SELECT</span> *
+                                                            <span class="hljs-keyword">FROM</span> life.most_recent_state));
+<span class="hljs-keyword">END</span> <span class="hljs-keyword">IF</span>;
+
+PERFORM life.print_state(boardsize, (<span class="hljs-keyword">SELECT</span> *
+                                    <span class="hljs-keyword">FROM</span> life.most_recent_state));
+<span class="hljs-keyword">END</span>;
+$$ LANGUAGE plpgsql;
+
+
+--<span class="hljs-keyword">SELECT</span> life.game_of_life(<span class="hljs-number">6</span>);
+</code></pre>
+    
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+</body>
+
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter M Haslem">
+    <meta name="description" content="Dexter Haslem - NetBSD cross compiling">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - NetBSD cross compiling (2018)</title>
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+</head>
+
+<body>
+
+<h1 id="netbsd-cross-compiling-tutorial">NetBSD cross-compiling tutorial</h1>
+<p>Lets build NetBSD starting from nothing!</p>
+<p>Thanks the to the great <code>build.sh</code> system I&#39;ve already gushed
+about, cross-compiling NetBSD from any other POSIX&#39;y host is cake.</p>
+<p>However, the docs are slightly out of date, and <strong>everything</strong> needed 
+is scattered across a few pages which may not be obvious for new-comers.
+For example, grabbing &#39;sets&#39; which is parlance for gzips of source code,
+is on a different page, and the kernel compile page is missing some new flags.</p>
+<p>Similarly, man pages are great if you <em>already</em> have an idea of what you&#39;re
+looking for. But I&#39;ll save that diatribe for another day.</p>
+<p>There is not much absolute-beginner orientated task-orientated documentation, too.
+Certainly the BSDs are niche and demand expertise but there is no reason
+to unnecessarily burden the learning curve for passerby&#39;s. This increases
+adoption!</p>
+<p>I&#39;ve also learned a few other things since writing my previous compiling
+notes. Particularly, the drivers in use when NetBSD is a virtualbox guest
+cause noticeably slower disk performance at the moment. I highly
+recommend to build sources from anything but a VM</p>
+<p>So with that said, this will be a tutorial for building NetBSD
+from a GNU/Linux host. The instructions should be very similar for Mac
+and other BSDs. </p>
+<p>Also, this will cover the 7.1.2 release, not <strong>current</strong> (WIP) sources
+To recap:</p>
+<ul>
+<li>We will build NetBSD <strong>7.1.2</strong> from sources.</li>
+<li>This is written from a GNU/Linux host</li>
+<li>the target we will cross compile for will be <strong>amd64</strong></li>
+</ul>
+<h2 id="step-1-grab-source-sets">Step 1: grab source sets</h2>
+<p>Navigate your big nasty web browser to the source sets directory here:</p>
+<p><a href="https://ftp.netbsd.org/pub/NetBSD/NetBSD-7.1.2/source/sets/">https://ftp.netbsd.org/pub/NetBSD/NetBSD-7.1.2/source/sets/</a></p>
+<p>Grab all the tgz, you can skip <code>xsrc.tgz</code> unless you want to compile X windows.</p>
+<p>I recommend saving all these in a tidy folder like ~/netbsd_build/7.1.2</p>
+<p>Next, untar em all, eg manually:</p>
+<pre><code class="lang-shell">$ pwd
+~/netbsd_build/<span class="hljs-number">7.1</span>.<span class="hljs-number">2</span>
+$ tar xvzf gnusrc<span class="hljs-selector-class">.tgz</span>
+$ tar xvzf sharesrc<span class="hljs-selector-class">.tgz</span>
+$ tar xvzf src<span class="hljs-selector-class">.tgz</span>
+$ tar xvzf syssrc<span class="hljs-selector-class">.tgz</span>
+$ tar xvzf xsrc<span class="hljs-selector-class">.tgz</span>  #(again, only <span class="hljs-keyword">if</span> you want to compile X)
+</code></pre>
+<p><em>if this pissed you off: write a shell for with wildcard expansion to do it in a oneliner!</em></p>
+<p>Once that&#39;s all done you should end up with something like this:</p>
+<pre><code>dexter<span class="hljs-variable">@slag</span><span class="hljs-symbol">:~/netbsd_build/</span><span class="hljs-number">7.1</span>.<span class="hljs-number">2</span><span class="hljs-variable">$ </span>tree -L <span class="hljs-number">2</span>
+.
+├── gnusrc.tgz
+├── sharesrc.tgz
+├── src.tgz
+├── syssrc.tgz
+└── usr
+    └── src
+
+<span class="hljs-number">2</span> directories, <span class="hljs-number">4</span> files
+dexter<span class="hljs-variable">@slag</span><span class="hljs-symbol">:~/netbsd_build/</span><span class="hljs-number">7.1</span>.<span class="hljs-number">2</span>$
+</code></pre><p>the funky sub <code>usr/src</code> dir is ok. Navigate into that directory for the 
+rest of the instructions
+<code>$ cd usr/src</code></p>
+<p>Next, we need to make a directory to output objects during build, if we dont do this
+we will get errors. It doesnt really matter where, just make the directory in the 
+<code>usr/src</code> subdir we are already in:</p>
+<p><code>$ mkdir obj</code></p>
+<p>We&#39;re ready to start compiling stuff!</p>
+<h2 id="building-toolchain">Building toolchain</h2>
+<p>The first step to build NetBSD is to build the compiler it expects to use.
+Long story short, dont expect, or try to use your host compiler. It&#39;s much easier (albeit it can be slow
+on older machines) to use the provided gcc sources.</p>
+<p>To do so, fire off <code>build.sh</code> like so:</p>
+<p><code>$ ./build.sh -U -m amd64 -O obj -j17 tools</code></p>
+<p>A quick explaination of the flags:</p>
+<ul>
+<li><code>-U</code>: we are not building as root. this is needed</li>
+<li><code>-m amd64</code>: build for amd64 machine</li>
+<li><code>-O obj</code>: stick our build objs in this &#39;obj&#39; folder we made above</li>
+<li><code>-j17</code>: use 17 threads. A fast-dirty value is number of cores/threads machine has. Its <a href="://softwareengineering.stackexchange.com/a/156823">complex</a>. Personally I add a few +/- for I/O overhead. </li>
+<li><code>tools</code>: lastly, what we want to make. Tools is a prerequisite to building the kernel and userspace</li>
+</ul>
+<p>It will grind a while, especially if you&#39;re on older hardware but you should eventually get an output like this</p>
+<pre><code>===&gt; Tools built to <span class="hljs-regexp">/home/</span>dexter<span class="hljs-regexp">/netbsd_build/</span><span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-regexp">/usr/</span>src<span class="hljs-regexp">/obj/</span>tooldir.Linux<span class="hljs-number">-4.13</span><span class="hljs-number">.0</span><span class="hljs-number">-38</span>-generic-x86_64
+===&gt; build.sh <span class="hljs-string">ended:</span>      Sun Apr  <span class="hljs-number">8</span> <span class="hljs-number">00</span>:<span class="hljs-number">15</span>:<span class="hljs-number">25</span> MDT <span class="hljs-number">2018</span>
+===&gt; Summary of <span class="hljs-string">results:</span>
+     build.sh <span class="hljs-string">command:</span>    ./build.sh -U -m amd64 -O obj -j17 tools
+     build.sh <span class="hljs-string">started:</span>    Sun Apr  <span class="hljs-number">8</span> <span class="hljs-number">00</span>:<span class="hljs-number">12</span>:<span class="hljs-number">01</span> MDT <span class="hljs-number">2018</span>
+     NetBSD <span class="hljs-string">version:</span>      <span class="hljs-number">7.1</span><span class="hljs-number">.2</span>
+<span class="hljs-symbol">     MACHINE:</span>             amd64
+<span class="hljs-symbol">     MACHINE_ARCH:</span>        x86_64
+     Build <span class="hljs-string">platform:</span>      Linux <span class="hljs-number">4.13</span><span class="hljs-number">.0</span><span class="hljs-number">-38</span>-generic x86_64
+<span class="hljs-symbol">     HOST_SH:</span>             <span class="hljs-regexp">/bin/</span>sh
+     MAKECONF <span class="hljs-string">file:</span>       <span class="hljs-regexp">/etc/</span>mk.conf (File not found)
+     TOOLDIR <span class="hljs-string">path:</span>        <span class="hljs-regexp">/home/</span>dexter<span class="hljs-regexp">/netbsd_build/</span><span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-regexp">/usr/</span>src<span class="hljs-regexp">/obj/</span>tooldir.Linux<span class="hljs-number">-4.13</span><span class="hljs-number">.0</span><span class="hljs-number">-38</span>-generic-x86_64
+     DESTDIR <span class="hljs-string">path:</span>        <span class="hljs-regexp">/home/</span>dexter<span class="hljs-regexp">/netbsd_build/</span><span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-regexp">/usr/</span>src<span class="hljs-regexp">/obj/</span>destdir.amd64
+     RELEASEDIR <span class="hljs-string">path:</span>     <span class="hljs-regexp">/home/</span>dexter<span class="hljs-regexp">/netbsd_build/</span><span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-regexp">/usr/</span>src<span class="hljs-regexp">/obj/</span>releasedir
+     Updated <span class="hljs-string">makewrapper:</span> <span class="hljs-regexp">/home/</span>dexter<span class="hljs-regexp">/netbsd_build/</span><span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-regexp">/usr/</span>src<span class="hljs-regexp">/obj/</span>tooldir.Linux<span class="hljs-number">-4.13</span><span class="hljs-number">.0</span><span class="hljs-number">-38</span>-generic-x86_64<span class="hljs-regexp">/bin/</span>nbmake-amd64
+     Tools built to <span class="hljs-regexp">/home/</span>dexter<span class="hljs-regexp">/netbsd_build/</span><span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-regexp">/usr/</span>src<span class="hljs-regexp">/obj/</span>tooldir.Linux<span class="hljs-number">-4.13</span><span class="hljs-number">.0</span><span class="hljs-number">-38</span>-generic-x86_64
+     build.sh <span class="hljs-string">ended:</span>      Sun Apr  <span class="hljs-number">8</span> <span class="hljs-number">00</span>:<span class="hljs-number">15</span>:<span class="hljs-number">25</span> MDT <span class="hljs-number">2018</span>
+===&gt; .
+</code></pre><p>Now we&#39;re ready to move on</p>
+<h2 id="building-a-kernel-redux">Building a kernel redux</h2>
+<p>To kick out the kernel, we follow suite with a slightly different command:</p>
+<p><code>$ ./build.sh -U -m amd64 -O obj -j17 kernel=GENERIC</code></p>
+<p>The new option <code>kernel=GENERIC</code> denotes which <strong>amd64</strong> kernel config file we want to build.
+These configs live in the subdir <code>sys/arch/&lt;arch&gt;/conf/</code> so in our case <code>sys/arch/amd64/conf/GENERIC</code> is the file.
+Ideally, you&#39;d copy and modify this file to your desire. But for this example lets compile the stock GENERIC.
+While its out of scope for this scenic tour, pique your interest with the &#39;makeoptions COPTS` line.</p>
+<p>Same looking output:</p>
+<pre><code>--- netbsd ---
+<span class="hljs-meta">#      link  GENERIC/netbsd</span>
+<span class="hljs-meta-keyword">/home/</span>dexter/netbsd_build/<span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-meta-keyword">/usr/</span>src<span class="hljs-meta-keyword">/obj/</span>tooldir.Linux<span class="hljs-number">-4.13</span><span class="hljs-number">.0</span><span class="hljs-number">-38</span>-generic-x86_64<span class="hljs-meta-keyword">/bin/</span>x86_64--netbsd-ld -Map netbsd.map --cref -T <span class="hljs-meta-keyword">/home/</span>dexter/netbsd_build/<span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-meta-keyword">/usr/</span>src<span class="hljs-meta-keyword">/sys/</span>arch<span class="hljs-meta-keyword">/amd64/</span>conf/kern.ldscript -Ttext <span class="hljs-number">0xffffffff80100000</span> -e start -z max-page-size=<span class="hljs-number">0x100000</span> -X -o netbsd ${SYSTEM_OBJ} ${EXTRA_OBJ} vers.o
+NetBSD <span class="hljs-number">7.1</span><span class="hljs-number">.2</span> (GENERIC) <span class="hljs-meta">#1: Sun Apr  8 00:33:55 MDT 2018</span>
+   text       data        bss        dec        hex    filename
+<span class="hljs-number">14227197</span>     <span class="hljs-number">654556</span>     <span class="hljs-number">593920</span>    <span class="hljs-number">15475673</span>     ec23d9    netbsd
+===&gt; Kernels built from GENERIC:
+  <span class="hljs-meta-keyword">/home/</span>dexter/netbsd_build/<span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-meta-keyword">/usr/</span>src<span class="hljs-meta-keyword">/obj/</span>sys<span class="hljs-meta-keyword">/arch/</span>amd64<span class="hljs-meta-keyword">/compile/</span>GENERIC/netbsd
+===&gt; build.sh ended:      Sun Apr  <span class="hljs-number">8</span> <span class="hljs-number">00</span>:<span class="hljs-number">33</span>:<span class="hljs-number">56</span> MDT <span class="hljs-number">2018</span>
+===&gt; Summary of results:
+     build.sh command:    ./build.sh -U -m amd64 -O obj -j17 kernel=GENERIC
+     build.sh started:    Sun Apr  <span class="hljs-number">8</span> <span class="hljs-number">00</span>:<span class="hljs-number">33</span>:<span class="hljs-number">12</span> MDT <span class="hljs-number">2018</span>
+     NetBSD version:      <span class="hljs-number">7.1</span><span class="hljs-number">.2</span>
+<span class="hljs-symbol">     MACHINE:</span>             amd64
+<span class="hljs-symbol">     MACHINE_ARCH:</span>        x86_64
+     Build platform:      Linux <span class="hljs-number">4.13</span><span class="hljs-number">.0</span><span class="hljs-number">-38</span>-generic x86_64
+<span class="hljs-symbol">     HOST_SH:</span>             <span class="hljs-meta-keyword">/bin/</span>sh
+     MAKECONF file:       <span class="hljs-meta-keyword">/etc/</span>mk.conf (File not found)
+     TOOLDIR path:        <span class="hljs-meta-keyword">/home/</span>dexter/netbsd_build/<span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-meta-keyword">/usr/</span>src<span class="hljs-meta-keyword">/obj/</span>tooldir.Linux<span class="hljs-number">-4.13</span><span class="hljs-number">.0</span><span class="hljs-number">-38</span>-generic-x86_64
+     DESTDIR path:        <span class="hljs-meta-keyword">/home/</span>dexter/netbsd_build/<span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-meta-keyword">/usr/</span>src<span class="hljs-meta-keyword">/obj/</span>destdir.amd64
+     RELEASEDIR path:     <span class="hljs-meta-keyword">/home/</span>dexter/netbsd_build/<span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-meta-keyword">/usr/</span>src<span class="hljs-meta-keyword">/obj/</span>releasedir
+     Updated makewrapper: <span class="hljs-meta-keyword">/home/</span>dexter/netbsd_build/<span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-meta-keyword">/usr/</span>src<span class="hljs-meta-keyword">/obj/</span>tooldir.Linux<span class="hljs-number">-4.13</span><span class="hljs-number">.0</span><span class="hljs-number">-38</span>-generic-x86_64<span class="hljs-meta-keyword">/bin/</span>nbmake-amd64
+     Building kernel without building new tools
+     Building kernel:     GENERIC
+     Build directory:     <span class="hljs-meta-keyword">/home/</span>dexter/netbsd_build/<span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-meta-keyword">/usr/</span>src<span class="hljs-meta-keyword">/obj/</span>sys<span class="hljs-meta-keyword">/arch/</span>amd64<span class="hljs-meta-keyword">/compile/</span>GENERIC
+     Kernels built from GENERIC:
+      <span class="hljs-meta-keyword">/home/</span>dexter/netbsd_build/<span class="hljs-number">7.1</span><span class="hljs-number">.2</span><span class="hljs-meta-keyword">/usr/</span>src<span class="hljs-meta-keyword">/obj/</span>sys<span class="hljs-meta-keyword">/arch/</span>amd64<span class="hljs-meta-keyword">/compile/</span>GENERIC/netbsd
+     build.sh ended:      Sun Apr  <span class="hljs-number">8</span> <span class="hljs-number">00</span>:<span class="hljs-number">33</span>:<span class="hljs-number">56</span> MDT <span class="hljs-number">2018</span>
+==&gt; .
+</code></pre><p>The actual <code>netbsd</code> kernel binary will be sitting in our obj/sys/arch/amd64/compile/GENERIC/ dir.
+To actually install it you&#39;d just copy it over your existing netbsd kernel.</p>
+<pre><code class="lang-sh">dexter@slag:~<span class="hljs-regexp">/netbsd_build/</span><span class="hljs-number">7.1</span>.<span class="hljs-number">2</span><span class="hljs-regexp">/usr/</span>src$ <span class="hljs-keyword">file</span> obj<span class="hljs-regexp">/sys/</span>arch<span class="hljs-regexp">/amd64/</span><span class="hljs-keyword">compile</span><span class="hljs-regexp">/GENERIC/</span>netbsd
+obj<span class="hljs-regexp">/sys/</span>arch<span class="hljs-regexp">/amd64/</span><span class="hljs-keyword">compile</span><span class="hljs-regexp">/GENERIC/</span>netbsd: ELF <span class="hljs-number">64</span>-bit LSB executable, x86-<span class="hljs-number">64</span>, version <span class="hljs-number">1</span> (SYSV), statically linked, <span class="hljs-keyword">for</span> NetBSD <span class="hljs-number">7.1</span>.<span class="hljs-number">2</span>, not stripped
+</code></pre>
+<h2 id="userland">Userland</h2>
+<p>Next is userland. no frills here, you will see the pattern</p>
+<p><code>$ ./build.sh -U -m amd64 -O obj -j17 release</code></p>
+<p>The only new option is just <code>release</code>. If you want to build X also pass in <code>-x</code></p>
+<h2 id="further-reading">Further reading</h2>
+<p>At this point I&#39;ve just overlapped the official guide on building, which has all the details. Check it out once
+you are ready to make modifications and actually install your new bins! </p>
+<p><a href="https://www.netbsd.org/docs/guide/en/chap-build.html">https://www.netbsd.org/docs/guide/en/chap-build.html</a></p>
+
+
+
+    <section class="back-hdr">
+        <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+    </section>
+
+</body>
+
+</html>

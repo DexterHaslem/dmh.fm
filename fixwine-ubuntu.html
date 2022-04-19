@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - sub page">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - fixing wine 3.0+ on unbuntu 18.04</title>
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+    <script src="https://media.dmh.fm/hljs/highlight.min.js"></script>
+</head>
+
+<body>
+<h1 id="getting-wine-3-0-working-on-ubuntu-18-04">Getting wine 3.0+ working on ubuntu 18.04</h1>
+<p>date: 7/21/2018</p>
+<p>Wine stable on ubuntu 18.04 seems to have broken auto-fetching gecko, which can break many installers with EULAs.</p>
+<p>You can see this happen with <code>wine iexplore https://google.com</code> or such, you will get an error like</p>
+<pre><code class="lang-console">Could <span class="hljs-keyword">not</span> load wine-gecko. HTML rendering will be disabled.
+<span class="hljs-number">000</span>9<span class="hljs-symbol">:err</span><span class="hljs-symbol">:mshtml</span><span class="hljs-symbol">:create_document_object</span> Failed to init Gecko, returning CLASS_E_CLASSNOTAVAILABLE
+</code></pre>
+<p>I ran into it with diabloII installers not being able to show and accept EULAs.</p>
+<p>The site has instructions explaining that the auto-installer would just grab the msis and plop em in the correct spot,
+which can also be done manually. Here&#39;s a quick and dirty on how to install wine and get gecko working:</p>
+<ol>
+<li>Install wine if you havent with <code>sudo apt install wine-stable</code></li>
+<li>sudo mdkir /usr/share/wine/gecko &amp;&amp; cd /usr/share/wine/gecko</li>
+<li>sudo wget <a href="http://dl.winehq.org/wine/wine-gecko/2.47/wine_gecko-2.47-x86_64.msi">http://dl.winehq.org/wine/wine-gecko/2.47/wine_gecko-2.47-x86_64.msi</a></li>
+<li>sudo wget <a href="http://dl.winehq.org/wine/wine-gecko/2.47/wine_gecko-2.47-x86.msi">http://dl.winehq.org/wine/wine-gecko/2.47/wine_gecko-2.47-x86.msi</a></li>
+<li>verify it works with <code>wine iexplore https://google.com</code></li>
+</ol>
+    
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+
+
+</body>
+
+</html>

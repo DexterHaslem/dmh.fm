@@ -1,0 +1,59 @@
+
+
+h1 {
+    font-weight: 600;
+    font-size: 42px;
+    line-height: 42px;
+    margin: 0px;
+    padding: 0px;
+}
+inline-img {
+    display: inline;
+    vertical-align: baseline;
+}
+
+body {
+    font-family: sans-serif;
+    margin: 0px auto 0px auto;
+    padding: 35px;
+    max-width: 74%;
+    line-height: 24px;
+}
+a:link {
+    text-decoration: none;
+    color: var(--main-color);
+}
+a:visited {
+    text-decoration: none;
+    color: var(--main-color);
+}
+.stuff-list {
+    list-style: none;
+    padding: 0px;
+}
+.stuff-list li {
+    display: inline;
+}
+.sq-list {
+    list-style: square;
+}
+.writing-list span {
+    color: grey;
+}
+.writing-date {
+    color: grey;
+}
+:root { --main-color: #0066cc; }
+.sect { 
+    /* padding-top: 1%;   */
+}
+footer {
+    padding-top: 1%;
+}
+.back-hdr {
+    padding-bottom: 1%;
+}
+pre { 
+    font-family: monospace; 
+    font-size: 16px;
+}

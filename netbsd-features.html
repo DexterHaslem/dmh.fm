@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - NetBSD features you may have missed">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - NetBSD features (2017)</title>
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+</head>
+
+<body>
+
+<h1 id="netbsd-features-you-may-have-missed">NetBSD features you may have missed</h1>
+<p>It&#39;s no secret NetBSD is the smallest of the three contemporary
+modern BSDs (FreeBSD, OpenBSD, NetBSD, intentionally ignoring PC-BSD/TrueOS).
+Many don&#39;t give NetBSD any more thought than &#39;oh its the one that can run on a toaster&#39;
+(which is true as long as it has a <a href="https://en.wikipedia.org/wiki/Memory_management_unit">MMU</a> :)</p>
+<p><img src="https://media.dmh.fm/netbsd-toaster.jpg" alt="the netbsd poster-child toaster-child">
+<strong>(Full article <a href="https://www.embeddedarm.com/blog/netbsd-toaster-powered-by-the-ts-7200-arm9-sbc/">here</a> )</strong></p>
+<p>There are some interesting features that are useful on desktops as well as
+embedded that deserve being mentioned. I list some of the features that
+caught my eye in no particular order. Also in no way are these unique to
+NetBSD (well mostly), but some may surprise you.</p>
+<h2 id="lua-kernel-ring0-code">Lua kernel / ring0 code</h2>
+<p>I&#39;m not sure how popular it is or if its really used, but it is
+a possibility to write kernel modules in <strong>Lua</strong>. This is pretty darn cool
+and lua support in the kernel is the fruits of a previous Google Summer of Code (GSoC)
+project.</p>
+<p>For Lua to work, you need to load the lua and lua sytem modules:</p>
+<pre><code><span class="hljs-meta"># modload lua</span>
+<span class="hljs-meta"># modload luasystm</span>
+</code></pre><p>Then you can create a Lua state and load a script like so:</p>
+<pre><code><span class="hljs-meta"># luactl create state1</span>
+<span class="hljs-meta"># luactl require state1 systm</span>
+<span class="hljs-meta"># luactl load state1 ./luahello.lua</span>
+</code></pre><p>You can find full examples <a href="https://github.com/NetBSD/src/tree/trunk/sys/modules/examples">here</a>
+Def checkout <code>intro(9lua)</code> too.</p>
+<h2 id="cgd-disk-partition-encryption">CGD disk/partition encryption</h2>
+<p><strong>CGD</strong> (Cryptographic device driver) lets you encrypt disks at an entire
+disk or partition level. Of course, this is nothing new, but it has
+more flexibility for key sizes and available ciphers versus, eg, OpenBSD.
+This may no longer be true</p>
+<h2 id="rump-kernel-drivers-in-userspace">rump kernel drivers in userspace</h2>
+<p><img src="https://media.dmh.fm/rump.jpg" alt="juicy rump"></p>
+<p><strong><a href="https://wiki.netbsd.org/rumpkernel/">NetBSD Rump kernels</a></strong> offer many benefits,
+of particular interest is being able to compile kernel drivers and test it
+in seconds without using a VM. In simplified terms, it is basically the
+various drivers that usually live in kernel space, but running as separate entities
+in the rump kernel userspace.</p>
+<p>Rump kernels are not an operating system specific
+concept, for background see <a href="https://github.com/rumpkernel/wiki/wiki/Info:-FAQ#user-content-What_is_a_rump_kernel">What is a rump kernel?</a>
+NetBSD &#39;anykernel&#39; is (was?) the first implementation of a usable rump kernel though.
+It has a funny name to boot</p>
+<h2 id="pkgsrc-can-do-some-cool-stuff">pkgsrc can do some cool stuff</h2>
+<p>I have to admit I&#39;m just starting to dip my toes in <code>pkgsrc</code>. It&#39;s a solid
+package manager, downloading and compiling sources for you and managing deps,
+as you would expect of a package manager in 2018.
+It has some lesser known auxiliary features:</p>
+<ul>
+<li>Portable, you can use it on other BSDs as well as Linux!</li>
+<li>Built in tools for auditing vulnerable software with <a href="https://ftp.netbsd.org/pub/pkgsrc/current/pkgsrc/pkgtools/pkg_install/README.html"><code>pkg_admin audit</code></a></li>
+<li>It can check licenses if you care about that. Eg warn/disable installing XYZ license software.</li>
+</ul>
+<h2 id="veriexec-ring0-binary-file-data-verification">Veriexec - Ring0 binary/file/data verification</h2>
+<p>In layman terms, <strong><a href="http://www.netbsd.org/docs/guide/en/chap-veriexec.html">veriexec</a></strong>
+compares binaries and files to a pre-configured whitelist of hashes and
+refuses to run any that diverge. While this would require a bit of setup
+(and would be annoying for casual daily desktop use), you could really lock
+down a machine with this setup that would be resilient to even root privilege
+ escalations.</p>
+<p>With the state of MD5 and SHA1 hashes being worthless for integrity and
+ having vulnerabilities and proof of collision respectively,
+it supports SHA256, SHA384, SHA512, and RMD160 hashing.
+There are a few levels of strictness which can make the machine dynamically learn
+or report in an IDS style of operation as well.</p>
+<h2 id="sane-config-directory-hierarchies-and-other-non-technical-things">Sane config/directory hierarchies and other non-technical things</h2>
+<p>This is not so much a feature as my personal preferences, but on NetBSD
+you get things like a sane, centralized <code>rc.d</code> startup system. No
+6 runlevels, no systemd, no having to rifle around to find defaults.
+<code>/etc/rc.d</code> after looking at <code>/etc/defaults/rc.conf</code> and be done with it.</p>
+<p>Additionally, third party stuff always ends up in <code>/usr/pkg</code> and their
+configs go in <code>/usr/pkg/etc</code>. While GNU/Linux isnt awful, I am annoyed switching
+distros and having no idea where things go, install to, overwrite, etc.</p>
+<p>Being able to install an entire system (with X) using an installer under 350mb
+is unheard of in this day and age too. I&#39;m pretty sure the Nvidia drivers are
+bigger than that now.</p>
+
+
+    <section class="back-hdr">
+        <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+    </section>
+
+</body>
+
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - npm cross platform gradle builds">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - npm xc gradle builds</title>
+
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+    <script src="https://media.dmh.fm/hljs/highlight.min.js"></script>
+</head>
+
+<body>
+    <h2>npm cross platform gradle builds </h2>
+
+    <p>This is a quick and dirty one, mostly so I dont forget to write down something painful I had to do recently.</p>
+<p>If you use node npm in a gradle build process, which is very likely in java projects with react or angular frontends, if you&#39;re like me you may think doing something like this will work fine:</p>
+<pre><code class="lang-groovy">    <span class="hljs-keyword">task</span> compileMyFrontend(<span class="hljs-keyword">type</span>: Exec) {
+        // <span class="hljs-keyword">or</span> whatever npm script...
+        commandLine <span class="hljs-string">"npm"</span>,<span class="hljs-string">"run"</span>, <span class="hljs-string">"build"</span>
+    }
+</code></pre>
+<p>You code away on your macbook and have no problems! Fast forward to having to be developing on
+windows, you quickly realize it will fail to find NPM which is odd.
+When I initially setup build gradles that needed to execute npm, i ran into the same problem, and found
+many stackoverflows recommending doing the following (which I did, being windows based at work):</p>
+<pre><code class="lang-groovy">    task compileMyFrontend(<span class="hljs-built_in">type</span>: Exec) {
+        // <span class="hljs-built_in">or</span> whatever npm script...
+        <span class="hljs-built_in">executable</span> <span class="hljs-string">"cmd"</span>
+        <span class="hljs-keyword">args</span> <span class="hljs-string">"/c npm install &amp;&amp; run build"</span>
+    }
+</code></pre>
+<p>There is a better way!</p>
+<p>It is apparently caused by the Process launching code in JVM needing the FULL executable file name. windows
+command prompt and powershell are smart enough to know npm&#39;s extension and execute it if possible, which
+they will do for anything that ends in .exe,.bat,.cmd, probably others..</p>
+<p>So, what exactly is npm on windows then? it&#39;s <code>npm.cmd</code> on node7, you can check yourself with:</p>
+<pre><code>&gt; <span class="hljs-keyword">where</span> npm
+</code></pre><p>so to get gradle to work, you need to execute</p>
+<pre><code><span class="hljs-built_in">command</span>Line <span class="hljs-string">'npm.cmd'</span>,<span class="hljs-string">'args..'</span>.
+</code></pre><p>Great! problem solved, time to drink beer right? Well doing that will break *nix builds. As one would expect,
+we need to add some glue to the build. Conditionally getting the build os is not built into gradle so you have
+to import some stuff, but any gradle3+ should work. tldr add this to top of your <code>build.gradle</code>:</p>
+<pre><code class="lang-groovy">    <span class="hljs-keyword">import</span> org.apache.tools.ant.taskdefs.condition.Os
+
+    <span class="hljs-function"><span class="hljs-keyword">def</span> <span class="hljs-title">iswindows</span> </span>= Os.isFamily(Os.FAMILY_WINDOWS)
+    project.ext.<span class="hljs-string">"npmExe"</span> = swindows ? <span class="hljs-string">"npm.cmd"</span> : <span class="hljs-string">"npm"</span>
+</code></pre>
+<p>I arbitrary called the variable &quot;npmExe&quot;, not &quot;npm&quot; because that looked slightly confusing.
+Now any npm tasks just need to use that variable directly in their command line, eg:</p>
+<pre><code class="lang-groovy">    <span class="hljs-keyword">task</span> compileMyFrontend(<span class="hljs-keyword">type</span>: Exec) {
+        // <span class="hljs-keyword">or</span> whatever npm script...
+        commandLine project.ext.<span class="hljs-string">"npmExe"</span>,<span class="hljs-string">"run"</span>, <span class="hljs-string">"build"</span>
+    }
+</code></pre>
+<p>This will work on windows and mac/linux, etc. Bleck</p>
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+</body>
+
+</html>

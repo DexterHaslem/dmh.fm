@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - Dynamic sites free AWS certs">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - Dynamic sites with free AWS Certs</title>
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+    <script src="https://media.dmh.fm/hljs/highlight.min.js"></script>
+</head>
+
+<body>
+    <h2>Dynamic sites with free AWS certs</h2>
+
+    <p>In this post I will cover how to use AWS to host dynamic content with a free AWS SSL cert.
+        Not much background, the reason I did this is I had a static website I wanted to move to
+        having some light dynamic content without having to switch up hosting too much.
+        Doing this with static content is easier and mostly well known
+        (just upload to S3 and cloudfront, good to go):</p>
+    <p><em>Route53 SSL-&gt;AWS CloudFront -&gt; S3 bucket set to hosting</em></p>
+    <p>Even with purely static content, this worked OK until I tried clicking on a link (foo.com/bar/baz) which S3 blew
+        up as a bucket identifier, since it does NOT have a file structure.
+        I immediately decided to scrap that idea and just do some actual webhosting.</p>
+    <h2 id="prerequisites">Prerequisites</h2>
+    <ul>
+        <li>Amazon AWS account (duh)</li>
+        <li>domain managed by route53</li>
+        <li>ec2 or beanstalk instance running your stuff</li>
+    </ul>
+    <h2 id="benefits">Benefits</h2>
+    <ul>
+        <li>Free SSL certs</li>
+        <li>Free <em>wildcard</em> SSL certs (!)</li>
+        <li>automatic management of certs (easier than even letsencrypt certbot!)</li>
+        <li>potentially free</li>
+    </ul>
+    <h2 id="new-approach">New approach</h2>
+    <p>You cant set a service alias in route53 directly to an EC2 instance (I didnt check EBS but..),
+        The trick is essentially this:</p>
+    <ul>
+        <li>Setup Route53 service alias to elastic balancer</li>
+        <li>Have elastic balancer group have a single target, the EC2 instance (haha)</li>
+        <li>profit</li>
+    </ul>
+    <p><em>Route53 SSL -&gt; EC2 elastic load balancer -&gt; target group forwarding BOTH HTTP And HTTPS to EC2 HTTP
+            port 80</em></p>
+    <p>The load balancer listeners look something like this:</p>
+    <p><img src="https://media.dmh.fm/aws-elb-web1.png" alt="ELB listeners"></p>
+    <p>The &#39;web&#39; target group port is set to 80, protocol <strong>HTTP</strong> and has our EC2 instance in it.
+        If you care about health checks, you will need to tweak it to accept a 301 or https.</p>
+    <p>On the EC2 a normal nginx installation serves up the content normally. Only a minor tweak for redirecting non
+        https is added:</p>
+    <pre><code class="lang-nginx">    
+    <span class="hljs-comment"># in your server block:</span>
+    <span class="hljs-attribute">proxy_set_header</span> X-Forwarded-Proto <span class="hljs-variable">$scheme</span>;
+    <span class="hljs-attribute">if</span> (<span class="hljs-variable">$http_x_forwarded_proto</span> != <span class="hljs-string">'https'</span>) {
+        <span class="hljs-attribute">return</span> <span class="hljs-number">301</span> https://<span class="hljs-variable">$host</span><span class="hljs-variable">$request_uri</span>;
+    }
+</code></pre>
+    <p>With all that done I wrote a helper script to build the site and shoot it to the webroot over scp.
+        If you&#39;re using debian/ubuntu based distro, nginx will be using www-data, so you can set permissions
+        like so:</p>
+    <pre><code class="lang-bash">
+sudo chown -R <span class="hljs-string">"<span class="hljs-subst">$USER</span>"</span>:www-<span class="hljs-keyword">data</span> /<span class="hljs-keyword">var</span>/www/html
+sudo chmod -R <span class="hljs-number">0755</span> /<span class="hljs-keyword">var</span>/www/html
+        </code></pre>
+    <p>Currently I&#39;m still just using hugo to mostly kick out a static site. To easily rebuild the hugo site and
+        shoot it up:</p>
+    <pre><code class="lang-bash">    
+$ hugo        
+<span class="hljs-comment">#pull these values out if you want to run ssh commands after scp (permissions etc)</span>
+$ key=your_pem_here.pem
+$ host=foo<span class="hljs-variable">@bar</span>.com
+$ scp -i <span class="hljs-variable">$key</span> -r public/* <span class="hljs-variable">$host</span><span class="hljs-symbol">:/var/www/html</span>
+</code></pre>
+
+<p>Hope this saves anyone else that needs to similar some time and money.</p>
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+</body>
+
+</html>

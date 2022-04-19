@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - Sigpipe">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - sigpipes</title>
+    <link rel="stylesheet" href="https://media.dmh.fm/hljs/styles/vs.min.css">
+</head>
+
+<body>
+    <h1 id="the-curious-case-of-sigpipe">the curious case of SIGPIPE</h1>
+<p>Shell interaction, signals, TTYs, jobs and the like are some of the core foundations that have been
+around since the birth of time sharing operating systems but much of it is left in the literal &#39;black box&#39;, even
+by developers! It can be quite complex when you start from the bottom up, but lets take a look at <code>SIGPIPE</code>,
+it allows for some interesting shell interaction that often goes unnoticed but is immediately useful.</p>
+<h2 id="generators">Generators</h2>
+<p>We start this example with a source of otherwise &#39;endless&#39; input for all intents and purposes.
+So called generators are a way to generate an infinite list of values, not unlike eg, <code>[1..]</code> in Haskell
+<img src="https://media.dmh.fm/shellgenerators.png" alt="generators"></p>
+<p>The idea is to have something that will spew values as long as something is interested.
+<code>yes</code> is probably the most simple of such programs, designed to generate &#39;y&#39; that can be piped
+to prompts and the such. The &#39;spoiler alert&#39; here is that yes somehow knows to end its input despite
+consisting of an infinite loop in code.</p>
+<h2 id="interesting-yes-complexity-side-note">interesting &#39;yes&#39; complexity side note</h2>
+<p><code>yes</code> may sound like the most simple C program imaginable. It mostly is, the guts of the OpenBSD version essentially consists of this:</p>
+<pre><code class="lang-c">for (<span class="hljs-comment">;;)</span>
+    puts(<span class="hljs-string">"y"</span>)<span class="hljs-comment">;</span>
+</code></pre>
+<p>(full sources: <a href="https://github.com/openbsd/src/blob/master/usr.bin/yes/yes.c">https://github.com/openbsd/src/blob/master/usr.bin/yes/yes.c</a>)</p>
+<p>However in the GNU version (in coreutils) is more optimized for performance and locale handling, 
+and ends up surprisingly different, with local buffering ahead of time and such: <a href="https://github.com/coreutils/coreutils/blob/master/src/yes.c">https://github.com/coreutils/coreutils/blob/master/src/yes.c</a></p>
+<p>This is worth pointing out because when we dig in later with <code>strace</code>, there will be &#39;noise&#39; 
+of these other operations in our investigation.</p>
+<p>The writing mechanic, eg, <code>puts()</code>. writes to STDOUT which in this case has been rigged up through our job pipe.
+Speaking of job pipes!</p>
+<h2 id="back-to-the-pipe-pipeline">Back to the pipe pipeline</h2>
+<p>So with generators and <code>yes</code> in mind, we can use in shell pipes, which falls into job control. TTY handling, shell interaction
+and job control is a very detailed beast I will not go into detail on here, but in layman&#39;s terms piping several commands
+together sticks em together in a job (which is within a session). This allows the whole operation to handled discreetly
+with signals, or &#39;bg&#39;, &#39;fg&#39; and &#39;jobs&#39; commands on any *NIX.</p>
+<p><img src="https://media.dmh.fm/shelljobcontrol.png" alt="shell jobs"></p>
+<p>This is important to note because a job is created, a pipe handle is created to direct STDOUT 
+(by default, you can specify which with 2&gt;&amp;1 and so forth) to STDIN 
+between all the subprocesses of the job and we will see the handle id later.
+For our purposes, just know the job creates a pipe to funnel STDOUT through. This is not technically completely correct
+but if you know better put on your blinders (especially before seeing these doodles)
+<img src="https://media.dmh.fm/pipestdinout.png" alt="shell pipe human centipede"></p>
+<p>(sorry, done playing with wonky watcom since i can&#39;t analog-type anymore)</p>
+<h2 id="show-me-the-yes">show me the yes</h2>
+<p>Running <code>yes</code> in a basic pipe, something like this:</p>
+<pre><code class="lang-shell">dmh@beer-disposal:~$ yes | head
+<span class="hljs-built_in">y</span>
+<span class="hljs-built_in">y</span>
+<span class="hljs-built_in">y</span>
+<span class="hljs-built_in">y</span>
+<span class="hljs-built_in">y</span>
+<span class="hljs-built_in">y</span>
+<span class="hljs-built_in">y</span>
+<span class="hljs-built_in">y</span>
+<span class="hljs-built_in">y</span>
+<span class="hljs-built_in">y</span>
+</code></pre>
+<p><em>if only the people behind asking for raises during performance reviews were more like <code>yes</code></em></p>
+<p>Prints exactly 10 &#39;y&#39;. Why 10? thats the default number of lines head will read as you can see in <code>man head</code>
+Yet, <code>yes</code> somehow knows to then terminate since no one is interested in reading the output anymore. </p>
+<p>It seems to magically know when head is done. Changing the amount of lines <code>head</code> hovers up with eg,
+<code>yes | head -n2</code> works as expected, printing two &#39;y&#39; lines and going back to your shell prompt normally.</p>
+<p>But <code>yes</code> spews &#39;y&#39; endlessly! How does it know when to kindly STFU? 
+This is handled with <code>SIGPIPE</code>! We can see this in the <a href="http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/signal.h.html#tag_13_42_03">signal.h docs</a></p>
+<p>&quot;The <code>SIGPIPE</code> section denotes default action is &#39;T&#39; (terminate) and <em>&#39;Write on a pipe with no one to read it.&#39;</em>&quot;</p>
+<p>the <code>write</code> syscall <a href="http://pubs.opengroup.org/onlinepubs/9699919799/functions/write.html">docs</a> also specify in failure conditions:</p>
+<p>&quot;An attempt is made to write to a pipe or FIFO that is not open for reading by any process, or that only has one end open. A SIGPIPE signal shall also be sent to the thread&quot;</p>
+<h2 id="wait-a-minute-i-thought-yes-used-puts">wait a minute, i thought yes used puts</h2>
+<p>Before we get lost in the weeds, things like <code>printf</code> and <code>puts</code> use the <code>write()</code> syscall to actually..
+write output. This is handled by the C runtime library! </p>
+<h2 id="breakdown-of-what-happens">breakdown of what happens</h2>
+<p>Dry docs aside and ignoring non-essential details like buffered read/writes, here is what happens:</p>
+<ol>
+<li><code>yes</code> writes batches of &#39;y\n&#39; repeatedly to STDOUT (which behind the scenes is a job pipe)</li>
+<li><code>head</code> reads from STDIN (the pipe until it satisfies 10 lines and then exits (closing its handle to the pipe)!</li>
+<li><code>yes</code> is still furiously trying to write to same pipe, next write since head exits returns -1.</li>
+<li><code>yes</code> receives SIGPIPE signal itself and also exits</li>
+</ol>
+<p>This ignores some less important details like STDOUT line buffering and buffered read/write causing a difference in read/written bytes but it is not relevant to get the point of what is happening.</p>
+<h2 id="digging-deeper">Digging deeper</h2>
+<p>We can see this by running the pipe operation through strace:</p>
+<pre><code class="lang-shell">dmh<span class="hljs-variable">@beer</span>-<span class="hljs-symbol">disposal:</span>~<span class="hljs-variable">$ </span>strace -f sh -c <span class="hljs-string">'yes | head'</span>
+</code></pre>
+<p>Here is the important parts highlighted, pid <strong>6541* is <code>yes</code> and pid </strong>6542** is <code>head</code></p>
+<p><img src="https://media.dmh.fm/sigpipestrace.png" alt="strace"></p>
+<p>On a side note, you may notice lots of other things going on in the strace, that is because this is 
+GNU coreutils yes, which as noted above does a lot of other &#39;stuff&#39; in name of locale handling and performance.</p>
+<p>A drastically better looking strace can be achieved on BSD systems for the motivated</p>
+<h2 id="ok-whats-your-point">Ok whats your point</h2>
+<p>The next time a haskell hipster is spouting the benefits of lazily computed infinite lists, let them know unix 
+has had a pragmatic version of the same thing since before they were probably born!</p>
+
+
+    <section class="back-hdr">
+        <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+    </section>
+
+</body>
+
+</html>

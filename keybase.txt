@@ -1,0 +1,56 @@
+==================================================================
+https://keybase.io/dexterhaslem
+--------------------------------------------------------------------
+
+I hereby claim:
+
+  * I am an admin of https://dexterhaslem.com
+  * I am dexterhaslem (https://keybase.io/dexterhaslem) on keybase.
+  * I have a public key ASBEZoNu3cefQV0n65ElxdrcDH9uQLZ4cZzU62snmSCL9go
+
+To do so, I am signing this object:
+
+{
+  "body": {
+    "key": {
+      "eldest_kid": "0120050d62d4ceec532a4314c392b67a0f76dae9b5ad960279635a75d56ed8ad84f70a",
+      "host": "keybase.io",
+      "kid": "01204466836eddc79f415d27eb9125c5dadc0c7f6e40b678719cd4eb6b2799208bf60a",
+      "uid": "1944a9cd94c30fa032c4870924739219",
+      "username": "dexterhaslem"
+    },
+    "merkle_root": {
+      "ctime": 1627973524,
+      "hash": "31622662357cf7d390e07614ec6633a4630ea960101c97d5641b24e6ef69c71e0aa837f2cc9c387ba01189afead5f8ecdb30d83e8f71df7f201cbec0cc794f9e",
+      "hash_meta": "3dfe27e7a15e8be521a339b30f06a9eaeca6d0658324699bea01b30ae0e556bf",
+      "seqno": 20494465
+    },
+    "service": {
+      "entropy": "MFFiCkhNIc/w23hRbgE4jvHq",
+      "hostname": "dexterhaslem.com",
+      "protocol": "https:"
+    },
+    "type": "web_service_binding",
+    "version": 2
+  },
+  "client": {
+    "name": "keybase.io go client",
+    "version": "5.7.0"
+  },
+  "ctime": 1627973581,
+  "expire_in": 504576000,
+  "prev": "0c38b1893e1861c6f3350c3b154ad1b23333acc7e10e2035c58ff1797277f910",
+  "seqno": 10,
+  "tag": "signature"
+}
+
+which yields the signature:
+
+hKRib2R5hqhkZXRhY2hlZMOpaGFzaF90eXBlCqNrZXnEIwEgRGaDbt3Hn0FdJ+uRJcXa3Ax/bkC2eHGc1OtrJ5kgi/YKp3BheWxvYWTESpcCCsQgDDixiT4YYcbzNQw7FUrRsjMzrMfhDiA1xY/xeXJ3+RDEIA38NknsUlvx7u8m7l2p4LXB+9hDDYo96NULGi5hjAj0AgHCo3NpZ8RAxy69NjmWmSR4oPakcq14Drk7F1lhaxq9W42lp2wgj5rBGxsZ9u/LwDxnQkponftl2qITWQYc/5dBOwa5jar7CKhzaWdfdHlwZSCkaGFzaIKkdHlwZQildmFsdWXEIM+N3j8eL0QJ1JS6V3HSa/ptdlMG1XYcosjbG+KSFODSo3RhZ80CAqd2ZXJzaW9uAQ==
+
+And finally, I am proving ownership of this host by posting or
+appending to this document.
+
+View my publicly-auditable identity here: https://keybase.io/dexterhaslem
+
+==================================================================

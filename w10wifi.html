@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="author" content="Dexter Haslem">
+    <meta name="description" content="Dexter Haslem - sub page">
+
+    <link rel="stylesheet" type="text/css" href="./style.css">
+    <title>dmh - Windows 10 wifi tweaks</title>
+</head>
+
+<body>
+    <h2>Windows 10 Wifi tweaks</h2>
+
+<em>I wrote this a long time ago and use an ethernet connection now, use with caution</em>
+
+<p>
+Wifi has never been great on windows 10, especially after the latest 'fall creator update'. 
+One of my wifi cards no longer works at all, despite working on this same exact version of 
+windows before a clean install! Anyway, I've found a few ways that seem to make the wifi 
+slightly more consistent, so here they are.. </p>
+
+<h3>Step zero: Wifi adapter name</h3>
+<p>
+We will need the short name of the wifi adapter and the easiest way is with <strong>netsh</strong>.
+To list wlan settings run the following in a cmd or powershell (Win+X):
+</p>
+<pre><code>
+PS C:\Users\Dexter> netsh wlan show settings
+
+Wireless LAN settings
+---------------------
+    Show blocked networks in visible network list: No
+
+    Only use GP profiles on GP-configured networks: No
+
+    Hosted network mode allowed in WLAN service: Yes
+
+    Allow shared user credentials for network authentication: Yes
+
+    Block period: Not Configured.
+
+    Auto configuration logic is disabled on interface "Wi-Fi 3"
+    MAC randomization not available on interface Wi-Fi 3
+</code></pre>
+
+<p>
+Look for the quoted part after interface, in this case my adapter name is Wi-Fi 3. 
+Alternatively, you can go to <code>Control Panel -> Network Connections</code>
+</p>
+
+<p>
+And that will have the same name. We'll need it for the rest of the steps.
+</p>
+<h3>First: Wifi autoconfig on/off bats</h3>
+
+Save these two in batch files so you can easily run them as needed:
+</p>
+
+<h4>WIFI_AUTO_ON.bat</h4>
+<pre><code>
+netsh wlan set autoconfig enabled=yes interface="Wi-Fi 3"
+</code></pre>
+</h4>
+
+<h4>WIFI_AUTO_OFF.bat</h4>
+<pre><code>
+netsh wlan set autoconfig enabled=yes interface="Wi-Fi 3"
+</code></pre>
+</h4>
+
+<p>
+NOTE: Replace "Wi-Fi 3" with the adapter name from the first step!
+
+Now you can right click on WIFI_AUTO_OFF.BAT and run as admin before playing an online game. For me, this seems to help with the persistent, 
+roughly 1 minute apart ping spikes. </p>
+
+<h3>Second: disable tuning heuristics</h3>
+<p>
+This one is a bit harder to quantify but in my highly non-scientific testing, my ping appeared to be more stable overall after turning off auto tuning. 
+Note this is machine wide and seems to be related to TCP window sizes. I've encounted no side effects but..
+</p>
+
+<pre><code>
+netsh int tcp set heuristics disabled
+netsh int tcp set global autotuninglevel=disabled
+netsh int tcp set global rss=enabled
+</code></pre>
+
+<p>
+Disable dat heuristic tuning!
+Hopefully this helps others eek out a a better usable wifi experience on windows.
+</p>
+
+<section class="back-hdr">
+    <p><a href="./index.html">..Back to Dexter Haslem home</a></p>
+</section>
+</body>
+
+</html>
